@@ -4,11 +4,11 @@
 
 Este repositorio contiene la implementación en Python del algoritmo **Octopus Optimization Algorithm (OOA)**, desarrollado como parte de un proyecto de tesis universitaria. 
 
-El objetivo principal de esta investigación y desarrollo es explorar el uso de algoritmos de **Inteligencia de Enjambre (*Swarm Intelligence*)** y metaheurísticas inspiradas en la naturaleza —específicamente el comportamiento inteligente de forrajeo de los pulpos— para la optimización automática de parámetros en filtros digitales de imágenes (como el filtro Bilateral y la Difusión Anisotrópica). El sistema busca restaurar imágenes degradadas con ruido, ajustando dinámicamente los parámetros para minimizar el Error Cuadrático Medio (MSE) y maximizar la Relación Señal-Ruido (SNR).
+El objetivo principal de esta investigación y desarrollo es explorar el uso de algoritmos de **Inteligencia de Enjambre (*Swarm Intelligence*)** y metaheurísticas inspiradas en la naturaleza específicamente el comportamiento inteligente de forrajeo de los pulpos para la optimización automática de parámetros en filtros digitales de imágenes (como el filtro Bilateral y la Difusión Anisotrópica). El sistema busca restaurar imágenes degradadas con ruido, ajustando dinámicamente los parámetros para minimizar el Error Cuadrático Medio (MSE) y maximizar la Relación Señal-Ruido (SNR).
 
 Este trabajo representa una adaptación y un *port* a Python orientado al procesamiento de imágenes, basado en el código matemático original.
 
-**Referencia**: [Repositorio original de MOOA/OOA](https://github.com/meijiasong/MOOA) *(Ajustar enlace si es necesario)*  
+**Referencia**: [Repositorio original de OOA](https://github.com/Chrisong-gh/MOOA)
 **Paper Base**: *Octopus optimization algorithm: A novel single- and multi-objective optimization algorithm for optimization problems* (Song, M., et al., 2025).
 
 ---
