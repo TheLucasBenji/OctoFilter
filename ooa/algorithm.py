@@ -21,6 +21,7 @@ Cada iteración tiene tres fases:
 from __future__ import annotations
 
 import math
+import concurrent.futures
 from dataclasses import dataclass, field
 from typing import Callable, Optional
 
@@ -51,7 +52,7 @@ class OctopusHead:
 # Funciones auxiliares
 # ---------------------------------------------------------------------------
 
-def _levy_flight(dim: int, beta: float = 1.5) -> np.ndarray:
+def _levy_flight(dim: int, beta: float = 1.5, rng: Optional[np.random.Generator] = None) -> np.ndarray:
     """Genera un vector de paso de vuelo de Lévy de una dimensión dada.
 
     Usa el algoritmo de Mantegna:
@@ -60,13 +61,16 @@ def _levy_flight(dim: int, beta: float = 1.5) -> np.ndarray:
         u ~ N(0, sigma^2),  v ~ N(0, 1)
         step = u / |v|^(1/beta)
     """
+    if rng is None:
+        rng = np.random.default_rng()
+
     sigma = (
         gamma(1 + beta) * math.sin(math.pi * beta / 2)
         / (gamma((1 + beta) / 2) * beta * 2 ** ((beta - 1) / 2))
     ) ** (1 / beta)
 
-    u = np.random.randn(dim) * sigma
-    v = np.random.randn(dim)
+    u = rng.standard_normal(dim) * sigma
+    v = rng.standard_normal(dim)
     step = u / np.abs(v) ** (1 / beta)
     return step
 
@@ -101,6 +105,7 @@ def ooa(
     dim: int,
     objective_fn: Callable[[np.ndarray], float],
     on_iteration: Optional[Callable[[int, float, np.ndarray], None]] = None,
+    rng: Optional[np.random.Generator] = None,
 ) -> tuple[float, np.ndarray, list[float]]:
     """Ejecuta el Algoritmo de Optimización del Pulpo.
 
@@ -127,6 +132,9 @@ def ooa(
     convergence_curve : list[float]
     """
 
+    if rng is None:
+        rng = np.random.default_rng()
+
     lb = np.asarray(lb, dtype=float)
     ub = np.asarray(ub, dtype=float)
 
@@ -144,138 +152,156 @@ def ooa(
     vr = 3.0        # rango de exploración/explotación
     ll = 0.8        # umbral entre exploración y explotación
 
-    # --- Inicializar tentáculos ---
     tentacles: list[Agent] = []
-    for _ in range(NTentacles):
-        pos = lb + np.random.rand(dim) * (ub - lb)
-        cost = objective_fn(pos)
-        tentacles.append(Agent(pos=pos, cost=cost))
-
-    # --- Inicializar exploradores ---
     scouts: list[Agent] = []
-    for _ in range(NScout):
-        pos = lb + np.random.rand(dim) * (ub - lb)
-        cost = objective_fn(pos)
-        scouts.append(Agent(pos=pos, cost=cost))
-
-    # --- Inicializar cabezas ---
     octopus: list[OctopusHead] = []
-    for _ in range(NHead):
-        pos = lb + np.random.rand(dim) * (ub - lb)
-        cost = objective_fn(pos)
-        octopus.append(OctopusHead(pos=pos, cost=cost))
 
-    # --- Asignar tentáculos a las cabezas (round-robin) ---
-    perm = np.random.permutation(NTentacles)
-    for idx, t_idx in enumerate(perm):
-        head_idx = idx % NHead
-        octopus[head_idx].tentacles.append(tentacles[t_idx])
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        # --- Inicializar agentes en paralelo ---
+        all_initial_positions = []
+        for _ in range(NTentacles):
+            all_initial_positions.append(lb + rng.random(dim) * (ub - lb))
+        for _ in range(NScout):
+            all_initial_positions.append(lb + rng.random(dim) * (ub - lb))
+        for _ in range(NHead):
+            all_initial_positions.append(lb + rng.random(dim) * (ub - lb))
+            
+        all_initial_costs = list(executor.map(objective_fn, all_initial_positions))
+        
+        idx = 0
+        for _ in range(NTentacles):
+            tentacles.append(Agent(pos=all_initial_positions[idx], cost=all_initial_costs[idx]))
+            idx += 1
+        for _ in range(NScout):
+            scouts.append(Agent(pos=all_initial_positions[idx], cost=all_initial_costs[idx]))
+            idx += 1
+        for _ in range(NHead):
+            octopus.append(OctopusHead(pos=all_initial_positions[idx], cost=all_initial_costs[idx]))
+            idx += 1
 
-    # --- Intercambio inicial ---
-    _exchange(octopus)
+        # --- Asignar tentáculos a las cabezas (round-robin) ---
+        perm = rng.permutation(NTentacles)
+        for idx_t, t_idx in enumerate(perm):
+            head_idx = idx_t % NHead
+            octopus[head_idx].tentacles.append(tentacles[t_idx])
 
-    # --- Mejor global (posición de la concha) ---
-    head_costs = np.array([h.cost for h in octopus])
-    best_head_idx = int(np.argmin(head_costs))
-    pBest = octopus[best_head_idx].pos.copy()
-    pBestScore = octopus[best_head_idx].cost
+        # --- Intercambio inicial ---
+        _exchange(octopus)
 
-    convergence: list[float] = [pBestScore]
+        # --- Mejor global (posición de la concha) ---
+        head_costs = np.array([h.cost for h in octopus])
+        best_head_idx = int(np.argmin(head_costs))
+        pBest = octopus[best_head_idx].pos.copy()
+        pBestScore = octopus[best_head_idx].cost
 
-    if on_iteration is not None:
-        on_iteration(0, pBestScore, pBest)
+        convergence: list[float] = [pBestScore]
 
-    # ===================================================================
-    # Bucle principal
-    # ===================================================================
-    for t in range(1, max_iter):
-        ld = vr * (1 - t / max_iter)  # decrece linealmente de vr a 0
+        if on_iteration is not None:
+            on_iteration(0, pBestScore, pBest)
 
-        # ----- Fase 1: Movimiento de tentáculos -----
-        for head in octopus:
-            for j, tent in enumerate(head.tentacles):
-                trans = 2 * ld * np.random.rand() - ld  # en [-ld, ld]
+        # ===================================================================
+        # Bucle principal
+        # ===================================================================
+        for t in range(1, max_iter):
+            ld = vr * (1 - t / max_iter)  # decrece linealmente de vr a 0
 
-                if abs(trans) < ll:
-                    # Explotación: moverse hacia el mejor global usando vuelo de Lévy
-                    tent_costs = np.array([tt.cost for tt in head.tentacles])
-                    local_best_idx = int(np.argmin(tent_costs))
-                    tent.pos = (
-                        tent.pos
-                        + np.random.rand()
-                        * (pBest - head.tentacles[local_best_idx].pos)
-                        * _levy_flight(dim)
-                    )
-                else:
-                    # Exploración: moverse relativo a la cabeza usando vuelo de Lévy
-                    tent.pos = (
-                        head.pos
-                        + np.random.rand()
-                        * (head.pos - tent.pos)
-                        * _levy_flight(dim)
-                    )
+            # ----- Fase 1: Movimiento de tentáculos -----
+            agents_to_eval = []
+            for head in octopus:
+                for j, tent in enumerate(head.tentacles):
+                    trans = 2 * ld * rng.random() - ld  # en [-ld, ld]
 
-                # Restringir a los límites
-                tent.pos = np.clip(tent.pos, lb, ub)
-                tent.cost = objective_fn(tent.pos)
+                    if abs(trans) < ll:
+                        # Explotación: moverse hacia el mejor global usando vuelo de Lévy
+                        tent_costs = np.array([tt.cost for tt in head.tentacles])
+                        local_best_idx = int(np.argmin(tent_costs))
+                        new_pos = (
+                            tent.pos
+                            + rng.random()
+                            * (pBest - head.tentacles[local_best_idx].pos)
+                            * _levy_flight(dim, rng=rng)
+                        )
+                    else:
+                        # Exploración: moverse relativo a la cabeza usando vuelo de Lévy
+                        new_pos = (
+                            head.pos
+                            + rng.random()
+                            * (head.pos - tent.pos)
+                            * _levy_flight(dim, rng=rng)
+                        )
+
+                    # Restringir a los límites
+                    new_pos = np.clip(new_pos, lb, ub)
+                    tent.pos = new_pos
+                    agents_to_eval.append(tent)
+
+            # Evaluar en paralelo
+            costs = list(executor.map(objective_fn, [a.pos for a in agents_to_eval]))
+            for i, tent in enumerate(agents_to_eval):
+                tent.cost = costs[i]
 
             _exchange(octopus)
 
-        # ----- Fase 2: Fase de exploradores -----
-        head_costs_arr = np.array([h.cost for h in octopus])
-        sorted_indices = np.argsort(head_costs_arr)
+            # ----- Fase 2: Fase de exploradores -----
+            head_costs_arr = np.array([h.cost for h in octopus])
+            sorted_indices = np.argsort(head_costs_arr)
 
-        for z in range(len(scouts)):
-            if z == 0:
-                flag_idx = sorted_indices[0]            # mejor cabeza
-            elif z == 1:
-                flag_idx = sorted_indices[-1]           # peor cabeza
-            else:
-                if len(sorted_indices) > 2:
-                    mid = np.random.randint(1, len(sorted_indices) - 1)
-                    flag_idx = sorted_indices[mid]          # cabeza intermedia aleatoria
+            for z in range(len(scouts)):
+                if z == 0:
+                    flag_idx = sorted_indices[0]            # mejor cabeza
+                elif z == 1:
+                    flag_idx = sorted_indices[-1]           # peor cabeza
                 else:
-                    flag_idx = sorted_indices[np.random.randint(0, len(sorted_indices))]
+                    if len(sorted_indices) > 2:
+                        mid = rng.integers(1, len(sorted_indices) - 1)
+                        flag_idx = sorted_indices[mid]          # cabeza intermedia aleatoria
+                    else:
+                        flag_idx = sorted_indices[rng.integers(0, len(sorted_indices))]
 
-            flag = octopus[flag_idx]
+                flag = octopus[flag_idx]
 
-            # El explorador explora alrededor de la cabeza marcada
-            scouts[z].pos = (
-                flag.pos
-                + np.random.rand() * ((ub + lb) / 2 - flag.pos)
-            )
-            scouts[z].pos = np.clip(scouts[z].pos, lb, ub)
-            scouts[z].cost = objective_fn(scouts[z].pos)
+                # El explorador explora alrededor de la cabeza marcada
+                scouts[z].pos = (
+                    flag.pos
+                    + rng.random() * ((ub + lb) / 2 - flag.pos)
+                )
+                scouts[z].pos = np.clip(scouts[z].pos, lb, ub)
+                scouts[z].cost = objective_fn(scouts[z].pos)
 
-            if scouts[z].cost < flag.cost:
-                # Reemplazar la posición de la cabeza con el explorador
-                octopus[flag_idx].pos = scouts[z].pos.copy()
-                octopus[flag_idx].cost = scouts[z].cost
+                if scouts[z].cost < flag.cost:
+                    # Reemplazar la posición de la cabeza con el explorador
+                    octopus[flag_idx].pos = scouts[z].pos.copy()
+                    octopus[flag_idx].cost = scouts[z].cost
 
-                # Reinicializar tentáculos alrededor de la nueva posición
-                n_tent = len(octopus[flag_idx].tentacles)
-                for i in range(n_tent):
-                    new_pos = (
-                        -np.ones(dim) * (octopus[flag_idx].pos - ll)
-                        + np.random.rand(dim) * (octopus[flag_idx].pos + ll)
-                    )
-                    new_pos = np.clip(new_pos, lb, ub)
-                    octopus[flag_idx].tentacles[i] = Agent(
-                        pos=new_pos,
-                        cost=objective_fn(new_pos),
-                    )
-                _exchange(octopus)
+                    # Reinicializar tentáculos alrededor de la nueva posición
+                    n_tent = len(octopus[flag_idx].tentacles)
+                    new_positions = []
+                    for i in range(n_tent):
+                        new_pos = (
+                            (octopus[flag_idx].pos - ll)
+                            + rng.random(dim) * (2 * ll)
+                        )
+                        new_positions.append(np.clip(new_pos, lb, ub))
+                        
+                    new_costs = list(executor.map(objective_fn, new_positions))
+                    
+                    for i in range(n_tent):
+                        octopus[flag_idx].tentacles[i] = Agent(
+                            pos=new_positions[i],
+                            cost=new_costs[i],
+                        )
+                    _exchange(octopus)
 
-        # ----- Actualizar el mejor global -----
-        head_costs_arr = np.array([h.cost for h in octopus])
-        min_idx = int(np.argmin(head_costs_arr))
-        if head_costs_arr[min_idx] < pBestScore:
-            pBest = octopus[min_idx].pos.copy()
-            pBestScore = head_costs_arr[min_idx]
+            # ----- Actualizar el mejor global -----
+            head_costs_arr = np.array([h.cost for h in octopus])
+            min_idx = int(np.argmin(head_costs_arr))
+            if head_costs_arr[min_idx] < pBestScore:
+                pBest = octopus[min_idx].pos.copy()
+                pBestScore = head_costs_arr[min_idx]
 
-        convergence.append(pBestScore)
+            convergence.append(pBestScore)
 
-        if on_iteration is not None:
-            on_iteration(t, pBestScore, pBest)
+            if on_iteration is not None:
+                on_iteration(t, pBestScore, pBest)
 
-    return pBestScore, pBest, convergence
+        return pBestScore, pBest, convergence

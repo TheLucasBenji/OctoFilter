@@ -58,13 +58,13 @@ def _perona_malik(
     """
     img = image.astype(np.float64)
 
-    for _ in range(niter):
-        # Gradientes en diferencias finitas (Norte, Sur, Este, Oeste)
-        deltaN = np.zeros_like(img)
-        deltaS = np.zeros_like(img)
-        deltaE = np.zeros_like(img)
-        deltaW = np.zeros_like(img)
+    # Gradientes en diferencias finitas (Norte, Sur, Este, Oeste)
+    deltaN = np.zeros_like(img)
+    deltaS = np.zeros_like(img)
+    deltaE = np.zeros_like(img)
+    deltaW = np.zeros_like(img)
 
+    for _ in range(niter):
         deltaN[:-1, :] = img[1:, :] - img[:-1, :]
         deltaS[1:, :] = img[:-1, :] - img[1:, :]
         deltaE[:, :-1] = img[:, 1:] - img[:, :-1]

@@ -162,6 +162,7 @@ def main() -> None:
         dim=dim,
         objective_fn=objective,
         on_iteration=on_iteration,
+        rng=rng,
     )
     total_time = time.time() - start_time
 

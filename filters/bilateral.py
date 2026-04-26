@@ -20,6 +20,16 @@ DIM = 3
 PARAM_NAMES = ["d (diameter)", "σ Color", "σ Space"]
 
 
+def _get_d(val: float) -> int:
+    """Extrae y formatea el parámetro de diámetro para que sea válido."""
+    d = int(round(val))
+    if d < 1:
+        d = 1
+    if d % 2 == 0:
+        d += 1
+    return d
+
+
 def apply(image: np.ndarray, params: np.ndarray) -> np.ndarray:
     """Aplica el filtro bilateral con el vector continuo ``params``.
 
@@ -36,13 +46,7 @@ def apply(image: np.ndarray, params: np.ndarray) -> np.ndarray:
     np.ndarray
         Imagen filtrada (mismo dtype que la entrada).
     """
-    d = int(round(params[0]))
-    # Asegura que d sea impar y al menos 1
-    if d < 1:
-        d = 1
-    if d % 2 == 0:
-        d += 1
-
+    d = _get_d(params[0])
     sigma_color = float(params[1])
     sigma_space = float(params[2])
 
@@ -51,7 +55,5 @@ def apply(image: np.ndarray, params: np.ndarray) -> np.ndarray:
 
 def format_params(params: np.ndarray) -> str:
     """Representación legible para humanos de los parámetros."""
-    d = int(round(params[0]))
-    if d % 2 == 0:
-        d += 1
+    d = _get_d(params[0])
     return f"d={d}, σColor={params[1]:.2f}, σSpace={params[2]:.2f}"
