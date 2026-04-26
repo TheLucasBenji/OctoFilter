@@ -231,8 +231,11 @@ def ooa(
             elif z == 1:
                 flag_idx = sorted_indices[-1]           # peor cabeza
             else:
-                mid = np.random.randint(1, len(sorted_indices) - 1)
-                flag_idx = sorted_indices[mid]          # cabeza intermedia aleatoria
+                if len(sorted_indices) > 2:
+                    mid = np.random.randint(1, len(sorted_indices) - 1)
+                    flag_idx = sorted_indices[mid]          # cabeza intermedia aleatoria
+                else:
+                    flag_idx = sorted_indices[np.random.randint(0, len(sorted_indices))]
 
             flag = octopus[flag_idx]
 

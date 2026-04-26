@@ -22,6 +22,7 @@ def show_results(
     metrics: dict[str, float],
     best_params_str: str,
     filter_name: str,
+    metric_name: str = "MSE",
 ) -> None:
     """Muestra los resultados finales en una sola ventana de matplotlib.
 
@@ -41,6 +42,8 @@ def show_results(
         Mejores parámetros en formato legible.
     filter_name : str
         Nombre del filtro utilizado (para visualización).
+    metric_name : str
+        Nombre de la métrica optimizada ("MSE" o "SNR").
     """
     fig = plt.figure(figsize=(13, 8))
     fig.suptitle(
@@ -72,7 +75,12 @@ def show_results(
     ax_conv.plot(convergence, color="#2563eb", linewidth=1.5)
     ax_conv.set_title("Curva de convergencia")
     ax_conv.set_xlabel("Iteración")
-    ax_conv.set_ylabel("MSE (costo)")
+    ax_conv.set_ylabel(f"{metric_name} (costo)")
+    
+    # Si la métrica es MSE (baja), invertimos el eje Y para que se vea en ascenso
+    if metric_name.upper() == "MSE":
+        ax_conv.invert_yaxis()
+        
     ax_conv.grid(True, alpha=0.3)
 
     # --- Inferior derecha: texto de métricas ---
@@ -85,7 +93,10 @@ def show_results(
         "── Métricas finales ──",
     ]
     for name, value in metrics.items():
-        text_lines.append(f"  {name}: {value:.4f}")
+        if isinstance(value, float):
+            text_lines.append(f"  {name}: {value:.4f}")
+        else:
+            text_lines.append(f"  {name}: {value}")
 
     text_lines += [
         "",

@@ -10,7 +10,7 @@ Uso:
 
 Carga una imagen, la degrada con ruido gaussiano, luego usa el Algoritmo de
 Optimización del Pulpo (OOA) para encontrar los parámetros óptimos del filtro
-que minimicen el MSE entre la imagen filtrada y la original.
+que minimicen el MSE o maximicen el SNR entre la imagen filtrada y la original.
 """
 
 from __future__ import annotations
@@ -44,6 +44,13 @@ def build_parser() -> argparse.ArgumentParser:
         choices=["bilateral", "anisotropic"],
         default="bilateral",
         help="Tipo de filtro a optimizar (default: bilateral)",
+    )
+    parser.add_argument(
+        "--metric",
+        type=str,
+        choices=["mse", "snr"],
+        default="mse",
+        help="Métrica a optimizar: 'mse' (minimizar) o 'snr' (maximizar) (default: mse)",
     )
     parser.add_argument(
         "--noise-sigma",
@@ -116,19 +123,28 @@ def main() -> None:
 
     # --- Función objetivo ---
     def objective(params: np.ndarray) -> float:
-        """Aplica el filtro con los parámetros dados y retorna el MSE frente a la original."""
+        """Aplica el filtro con los parámetros dados y retorna el costo (MSE o -SNR)."""
         filtered = filter_mod.apply(noisy, params)
-        return mse(image, filtered)
+        if args.metric == "snr":
+            # OOA minimiza, por lo que para maximizar SNR retornamos su negativo
+            return -snr(image, filtered)
+        else:
+            return mse(image, filtered)
 
     # --- Callback para reportar por iteración ---
     def on_iteration(iteration: int, best_cost: float, best_pos: np.ndarray) -> None:
         elapsed = time.time() - start_time
         params_str = filter_mod.format_params(best_pos)
         filtered_best = filter_mod.apply(noisy, best_pos)
+        current_mse = mse(image, filtered_best)
         current_snr = snr(image, filtered_best)
+        
+        cost_str = f"{-best_cost if args.metric == 'snr' else best_cost:>10.4f}"
+        
         print(
             f"  Iter {iteration:>3d}/{args.iterations}  |  "
-            f"MSE={best_cost:>10.4f}  |  SNR={current_snr:>7.2f} dB  |  "
+            f"MSE={current_mse:>10.4f}  |  SNR={current_snr:>7.2f} dB  |  "
+            f"Costo={cost_str}  |  "
             f"Params: {params_str}  |  "
             f"t={elapsed:.1f}s"
         )
@@ -171,12 +187,18 @@ def main() -> None:
 
     # --- Mostrar ---
     metrics = {
+        "Métrica Objetivo": "SNR" if args.metric == "snr" else "MSE",
         "MSE (con ruido)": noisy_mse,
         "MSE (optimizado)": final_mse,
         "SNR (con ruido) [dB]": noisy_snr,
         "SNR (optimizado) [dB]": final_snr,
         "Mejora MSE [%]": (noisy_mse - final_mse) / noisy_mse * 100,
     }
+    
+    # Si optimizamos SNR, el costo que grafica OOA es negativo.
+    # Lo invertimos para visualizar la subida del SNR.
+    if args.metric == "snr":
+        convergence = [-c for c in convergence]
 
     show_results(
         original=image,
@@ -186,6 +208,7 @@ def main() -> None:
         metrics=metrics,
         best_params_str=params_str,
         filter_name=filter_name,
+        metric_name="SNR" if args.metric == "snr" else "MSE",
     )
 
 

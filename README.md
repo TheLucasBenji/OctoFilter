@@ -50,6 +50,7 @@ El script expone múltiples argumentos para afinar la experimentación:
 
 - `image` *(posicional)*: Ruta de la imagen original a procesar (obligatorio).
 - `--filter`: Filtro a optimizar. Opciones válidas: `bilateral`, `anisotropic` (por defecto: `bilateral`).
+- `--metric`: Métrica objetivo para guiar la optimización. Opciones válidas: `mse` (minimiza el Error Cuadrático Medio), `snr` (maximiza la Relación Señal-Ruido) (por defecto: `mse`).
 - `--noise-sigma`: Nivel (desviación estándar) del ruido Gaussiano sintético que se inyectará a la imagen (por defecto: `25.0`).
 - `--population`: Tamaño de la población (número de agentes/pulpos) para el OOA (por defecto: `30`).
 - `--iterations`: Número máximo de iteraciones del algoritmo (por defecto: `50`).
@@ -57,5 +58,5 @@ El script expone múltiples argumentos para afinar la experimentación:
 
 **Ejemplo de ejecución con parámetros personalizados:**
 ```bash
-python main.py woody.png --filter anisotropic --noise-sigma 30 --population 40 --iterations 50
+python main.py cere.png --filter anisotropic --metric snr --noise-sigma 30 --population 40 --iterations 50
 ```
