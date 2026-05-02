@@ -3,7 +3,7 @@
 Optimizador de Filtros de Imagen OOA — Punto de Entrada CLI
 
 Uso:
-    python main.py <ruta_imagen> [--filter bilateral|anisotropic]
+    python main.py <ruta_imagen> [--filter bilateral|anisotropic|nlmeans]
                                  [--noise-sigma 25]
                                  [--population 30]
                                  [--iterations 50]
@@ -25,7 +25,7 @@ import numpy as np
 from ooa.algorithm import ooa
 from imaging.noise import add_gaussian_noise
 from imaging.metrics import mse, snr
-from filters import bilateral, anisotropic
+from filters import bilateral, anisotropic, nlmeans
 from visualization.display import show_results
 
 
@@ -41,7 +41,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--filter",
         type=str,
-        choices=["bilateral", "anisotropic"],
+        choices=["bilateral", "anisotropic", "nlmeans"],
         default="bilateral",
         help="Tipo de filtro a optimizar (default: bilateral)",
     )
@@ -107,9 +107,12 @@ def main() -> None:
     if args.filter == "bilateral":
         filter_mod = bilateral
         filter_name = "Bilateral"
-    else:
+    elif args.filter == "anisotropic":
         filter_mod = anisotropic
         filter_name = "Difusión Anisotrópica (Perona-Malik)"
+    else:
+        filter_mod = nlmeans
+        filter_name = "Non-Local Means"
 
     lb = filter_mod.LOWER_BOUNDS
     ub = filter_mod.UPPER_BOUNDS
