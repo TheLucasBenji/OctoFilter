@@ -4,7 +4,7 @@
 
 Este repositorio contiene la implementación en Python del algoritmo **Octopus Optimization Algorithm (OOA)**, desarrollado como parte de un proyecto de tesis universitaria. 
 
-El objetivo principal de esta investigación y desarrollo es explorar el uso de algoritmos de **Inteligencia de Enjambre (*Swarm Intelligence*)** y metaheurísticas inspiradas en la naturaleza específicamente el comportamiento inteligente de forrajeo de los pulpos para la optimización automática de parámetros en filtros digitales de imágenes (como el filtro Bilateral y la Difusión Anisotrópica). El sistema busca restaurar imágenes degradadas con ruido, ajustando dinámicamente los parámetros para minimizar el Error Cuadrático Medio (MSE) y maximizar la Relación Señal-Ruido (SNR).
+El objetivo principal de esta investigación y desarrollo es explorar el uso de algoritmos de **Inteligencia de Enjambre (*Swarm Intelligence*)** y metaheurísticas inspiradas en la naturaleza específicamente el comportamiento inteligente de forrajeo de los pulpos para la optimización automática de parámetros en filtros digitales de imágenes (como el filtro Bilateral, la Difusión Anisotrópica y Non-Local Means). El sistema busca restaurar imágenes degradadas con ruido, ajustando dinámicamente los parámetros para minimizar el Error Cuadrático Medio (MSE) y maximizar la Relación Señal-Ruido (SNR).
 
 Este trabajo representa una adaptación y un *port* a Python orientado al procesamiento de imágenes, basado en el código matemático original.
 
@@ -42,6 +42,9 @@ python main.py cere.png
 
 # Ejecutar optimización con el filtro de difusión anisotrópica
 python main.py cere.png --filter anisotropic
+
+# Ejecutar optimización con el filtro Non-Local Means
+python main.py cere.png --filter nlmeans
 ```
 
 ### Opciones de línea de comandos
@@ -49,7 +52,7 @@ python main.py cere.png --filter anisotropic
 El script expone múltiples argumentos para afinar la experimentación:
 
 - `image` *(posicional)*: Ruta de la imagen original a procesar (obligatorio).
-- `--filter`: Filtro a optimizar. Opciones válidas: `bilateral`, `anisotropic` (por defecto: `bilateral`).
+- `--filter`: Filtro a optimizar. Opciones válidas: `bilateral`, `anisotropic`, `nlmeans` (por defecto: `bilateral`).
 - `--metric`: Métrica objetivo para guiar la optimización. Opciones válidas: `mse` (minimiza el Error Cuadrático Medio), `snr` (maximiza la Relación Señal-Ruido) (por defecto: `mse`).
 - `--noise-sigma`: Nivel (desviación estándar) del ruido Gaussiano sintético que se inyectará a la imagen (por defecto: `25.0`).
 - `--population`: Tamaño de la población (número de agentes/pulpos) para el OOA (por defecto: `30`).
@@ -59,4 +62,5 @@ El script expone múltiples argumentos para afinar la experimentación:
 **Ejemplo de ejecución con parámetros personalizados:**
 ```bash
 python main.py cere.png --filter anisotropic --metric snr --noise-sigma 30 --population 40 --iterations 50
+python main.py cere.png --filter nlmeans --metric snr --noise-sigma 30 --population 40 --iterations 50
 ```
