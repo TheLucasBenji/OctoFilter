@@ -215,10 +215,16 @@ def ooa(
                         # Explotación: moverse hacia el mejor global usando vuelo de Lévy
                         tent_costs = np.array([tt.cost for tt in head.tentacles])
                         local_best_idx = int(np.argmin(tent_costs))
+                        
+                        direccion = pBest - head.tentacles[local_best_idx].pos
+                        # Si la diferencia es casi nula, inyectar un micro-movimiento
+                        if np.linalg.norm(direccion) < 1e-5:
+                            direccion = (rng.random(dim) - 0.5) * 1e-3
+                            
                         new_pos = (
                             tent.pos
                             + rng.random()
-                            * (pBest - head.tentacles[local_best_idx].pos)
+                            * direccion
                             * _levy_flight(dim, rng=rng)
                         )
                     else:
@@ -277,9 +283,11 @@ def ooa(
                     n_tent = len(octopus[flag_idx].tentacles)
                     new_positions = []
                     for i in range(n_tent):
+                        # Radio de búsqueda del 10% del espacio total
+                        radio = 0.10 * (ub - lb)
                         new_pos = (
-                            (octopus[flag_idx].pos - ll)
-                            + rng.random(dim) * (2 * ll)
+                            (octopus[flag_idx].pos - radio)
+                            + rng.random(dim) * (2 * radio)
                         )
                         new_positions.append(np.clip(new_pos, lb, ub))
                         

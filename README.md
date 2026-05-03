@@ -62,17 +62,17 @@ El script expone múltiples argumentos para afinar la experimentación:
 **Ejemplos por filtro y métrica:**
 ```bash
 # Filtro Bilateral
-python main.py cere.png --filter bilateral --metric mse  --noise-sigma 25 --population 30 --iterations 50 --seed 42
-python main.py cere.png --filter bilateral --metric snr  --noise-sigma 25 --population 30 --iterations 50 --seed 42
-python main.py cere.png --filter bilateral --metric piqe --noise-sigma 25 --population 30 --iterations 50 --seed 42
+python main.py cere.png --filter bilateral --metric mse --population 30 --iterations 30 --seed 42
+python main.py cere.png --filter bilateral --metric snr --population 30 --iterations 30 --seed 42
+python main.py cere.png --filter bilateral --metric piqe --population 30 --iterations 30 --seed 42
 
 # Difusión Anisotrópica (Perona-Malik)
-python main.py cere.png --filter anisotropic --metric mse  --noise-sigma 30 --population 40 --iterations 50 --seed 42
-python main.py cere.png --filter anisotropic --metric snr  --noise-sigma 30 --population 40 --iterations 50 --seed 42
-python main.py cere.png --filter anisotropic --metric piqe --noise-sigma 30 --population 40 --iterations 50 --seed 42
+python main.py cere.png --filter anisotropic --metric mse --population 40 --iterations 30 --seed 42
+python main.py cere.png --filter anisotropic --metric snr --population 40 --iterations 30 --seed 42
+python main.py cere.png --filter anisotropic --metric piqe --population 40 --iterations 30 --seed 42
 
 # Non-Local Means
-python main.py cere.png --filter nlmeans --metric mse  --noise-sigma 30 --population 40 --iterations 50 --seed 42
-python main.py cere.png --filter nlmeans --metric snr  --noise-sigma 30 --population 40 --iterations 50 --seed 42
-python main.py cere.png --filter nlmeans --metric piqe --noise-sigma 30 --population 40 --iterations 50 --seed 42
+python main.py cere.png --filter nlmeans --metric mse --population 40 --iterations 30 --seed 42
+python main.py cere.png --filter nlmeans --metric snr --population 40 --iterations 30 --seed 42
+python main.py cere.png --filter nlmeans --metric piqe --population 40 --iterations 30 --seed 42
 ```

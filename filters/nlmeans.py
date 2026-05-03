@@ -53,7 +53,14 @@ def apply(image: np.ndarray, params: np.ndarray) -> np.ndarray:
     template = _odd_int(params[1], min_val=3)
     search = _odd_int(params[2], min_val=template + 2)
 
-    return cv2.fastNlMeansDenoising(image, None, h, template, search)
+    # fastNlMeansDenoising solo soporta CV_8U
+    if image.dtype != np.uint8:
+        image_uint8 = np.clip(image, 0, 255).astype(np.uint8)
+    else:
+        image_uint8 = image
+
+    result = cv2.fastNlMeansDenoising(image_uint8, None, h, template, search)
+    return result.astype(np.float32)
 
 
 def format_params(params: np.ndarray) -> str:

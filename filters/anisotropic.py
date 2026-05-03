@@ -109,7 +109,7 @@ def apply(image: np.ndarray, params: np.ndarray) -> np.ndarray:
     option = 1 if params[3] < 1.5 else 2
 
     result = _perona_malik(image, niter, kappa, gamma_val, option)
-    return np.clip(result, 0, 255).astype(np.uint8)
+    return result
 
 
 def format_params(params: np.ndarray) -> str:

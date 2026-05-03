@@ -21,6 +21,7 @@ import time
 
 import cv2
 import numpy as np
+from skimage.restoration import estimate_sigma
 
 from ooa.algorithm import ooa
 from imaging.noise import add_gaussian_noise
@@ -99,6 +100,11 @@ def main() -> None:
 
     # --- Añadir ruido ---
     noisy = add_gaussian_noise(image, sigma=args.noise_sigma, rng=rng)
+    
+    # Conversión a float32 para evaluación sub-píxel de OOA
+    image_f32 = image.astype(np.float32)
+    noisy_f32 = noisy.astype(np.float32)
+
     noisy_mse = mse(image, noisy)
     noisy_snr = snr(image, noisy)
     noisy_piqe = piqe(noisy)
@@ -115,9 +121,29 @@ def main() -> None:
         filter_mod = nlmeans
         filter_name = "Non-Local Means"
 
-    lb = filter_mod.LOWER_BOUNDS
-    ub = filter_mod.UPPER_BOUNDS
+    lb = filter_mod.LOWER_BOUNDS.copy()
+    ub = filter_mod.UPPER_BOUNDS.copy()
     dim = filter_mod.DIM
+
+    # --- Estimación dinámica de límites ---
+    try:
+        ruido_estimado = estimate_sigma(noisy_f32, channel_axis=None)
+    except TypeError:
+        # Fallback para versiones antiguas de skimage
+        ruido_estimado = estimate_sigma(noisy_f32, multichannel=False)
+        
+    print(f"Ruido estimado en la imagen: {ruido_estimado:.2f}")
+
+    if args.filter == "bilateral":
+        # Ajustar sigmaColor (idx 1) y sigmaSpace (idx 2)
+        lb[1] = max(10.0, ruido_estimado * 0.5)
+        ub[1] = max(lb[1] + 10.0, min(200.0, ruido_estimado * 3.0))
+        lb[2] = max(10.0, ruido_estimado * 0.5)
+        ub[2] = max(lb[2] + 10.0, min(200.0, ruido_estimado * 3.0))
+    elif args.filter == "anisotropic":
+        # Ajustar kappa (idx 1)
+        lb[1] = max(10.0, ruido_estimado * 0.5)
+        ub[1] = max(lb[1] + 10.0, min(100.0, ruido_estimado * 3.0))
 
     print(f"\nFiltro: {filter_name}")
     print(f"Espacio de búsqueda: {dim}D")
@@ -128,14 +154,15 @@ def main() -> None:
     # --- Función objetivo ---
     def objective(params: np.ndarray) -> float:
         """Aplica el filtro con los parámetros dados y retorna el costo (MSE, -SNR o PIQE)."""
-        filtered = filter_mod.apply(noisy, params)
+        filtered = filter_mod.apply(noisy_f32, params)
         if args.metric == "snr":
             # OOA minimiza, por lo que para maximizar SNR retornamos su negativo
-            return -snr(image, filtered)
+            return -snr(image_f32, filtered)
         elif args.metric == "piqe":
-            return piqe(filtered)
+            # PIQE podría necesitar valores en [0, 255]
+            return piqe(np.clip(filtered, 0, 255).astype(np.uint8))
         else:
-            return mse(image, filtered)
+            return mse(image_f32, filtered)
 
     # --- Callback para reportar por iteración ---
     def on_iteration(iteration: int, best_cost: float, best_pos: np.ndarray) -> None:
