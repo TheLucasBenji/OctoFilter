@@ -24,7 +24,7 @@ import numpy as np
 from skimage.restoration import estimate_sigma
 
 from ooa.algorithm import ooa
-from imaging.noise import add_gaussian_noise
+from imaging.noise import add_gaussian_noise, add_salt_and_pepper_noise
 from imaging.metrics import mse, snr, piqe
 from filters import bilateral, anisotropic, nlmeans
 from visualization.display import show_results
@@ -52,6 +52,19 @@ def build_parser() -> argparse.ArgumentParser:
         choices=["mse", "snr", "piqe"],
         default="mse",
         help="Métrica a optimizar: 'mse' (minimizar), 'snr' (maximizar) o 'piqe' (minimizar, no-referencia) (default: mse)",
+    )
+    parser.add_argument(
+        "--noise-type",
+        type=str,
+        choices=["gaussian", "sp"],
+        default="gaussian",
+        help="Tipo de ruido a aplicar: 'gaussian' o 'sp' (sal y pimienta) (default: gaussian)",
+    )
+    parser.add_argument(
+        "--noise-amount",
+        type=float,
+        default=0.05,
+        help="Proporción para ruido sal y pimienta (default: 0.05)",
     )
     parser.add_argument(
         "--noise-sigma",
@@ -99,7 +112,12 @@ def main() -> None:
     print(f"Imagen cargada: {args.image}  ({image.shape[1]}x{image.shape[0]} px)")
 
     # --- Añadir ruido ---
-    noisy = add_gaussian_noise(image, sigma=args.noise_sigma, rng=rng)
+    if args.noise_type == "gaussian":
+        noisy = add_gaussian_noise(image, sigma=args.noise_sigma, rng=rng)
+        noise_info = f"Gaussiano (σ={args.noise_sigma})"
+    else:
+        noisy = add_salt_and_pepper_noise(image, amount=args.noise_amount, rng=rng)
+        noise_info = f"Sal y Pimienta (proporción={args.noise_amount})"
     
     # Conversión a float32 para evaluación sub-píxel de OOA
     image_f32 = image.astype(np.float32)
@@ -108,7 +126,7 @@ def main() -> None:
     noisy_mse = mse(image, noisy)
     noisy_snr = snr(image, noisy)
     noisy_piqe = piqe(noisy)
-    print(f"Ruido añadido (σ={args.noise_sigma})  →  MSE={noisy_mse:.2f}, SNR={noisy_snr:.2f} dB, PIQE={noisy_piqe:.2f}")
+    print(f"Ruido añadido: {noise_info}  →  MSE={noisy_mse:.2f}, SNR={noisy_snr:.2f} dB, PIQE={noisy_piqe:.2f}")
 
     # --- Seleccionar módulo de filtro ---
     if args.filter == "bilateral":
@@ -126,13 +144,18 @@ def main() -> None:
     dim = filter_mod.DIM
 
     # --- Estimación dinámica de límites ---
-    try:
-        ruido_estimado = estimate_sigma(noisy_f32, channel_axis=None)
-    except TypeError:
-        # Fallback para versiones antiguas de skimage
-        ruido_estimado = estimate_sigma(noisy_f32, multichannel=False)
-        
-    print(f"Ruido estimado en la imagen: {ruido_estimado:.2f}")
+    if args.noise_type == "gaussian":
+        try:
+            ruido_estimado = estimate_sigma(noisy_f32, channel_axis=None)
+        except TypeError:
+            # Fallback para versiones antiguas de skimage
+            ruido_estimado = estimate_sigma(noisy_f32, multichannel=False)
+        print(f"Ruido estimado en la imagen: {ruido_estimado:.2f}")
+    else:
+        # estimate_sigma no funciona bien con ruido impulsivo (sal y pimienta)
+        # Usamos un valor virtual basado en la proporción para que los límites no colapsen
+        ruido_estimado = args.noise_amount * 1000.0  # Heurística simple
+        print(f"Ruido Sal y Pimienta detectado. Desactivando restricción estricta de límites.")
 
     if args.filter == "bilateral":
         # Ajustar sigmaColor (idx 1) y sigmaSpace (idx 2)
@@ -168,10 +191,12 @@ def main() -> None:
     def on_iteration(iteration: int, best_cost: float, best_pos: np.ndarray) -> None:
         elapsed = time.time() - start_time
         params_str = filter_mod.format_params(best_pos)
-        filtered_best = filter_mod.apply(noisy, best_pos)
-        current_mse = mse(image, filtered_best)
-        current_snr = snr(image, filtered_best)
-        current_piqe = piqe(filtered_best)
+
+        filtered_best = filter_mod.apply(noisy_f32, best_pos)
+        current_mse = mse(image_f32, filtered_best)
+        current_snr = snr(image_f32, filtered_best)
+        # PIQE sigue necesita formato uint8 [0,255]
+        current_piqe = piqe(np.clip(filtered_best, 0, 255).astype(np.uint8))
 
         cost_str = f"{-best_cost if args.metric == 'snr' else best_cost:>10.4f}"
 

@@ -54,7 +54,9 @@ El script expone múltiples argumentos para afinar la experimentación:
 - `image` *(posicional)*: Ruta de la imagen original a procesar (obligatorio).
 - `--filter`: Filtro a optimizar. Opciones válidas: `bilateral`, `anisotropic`, `nlmeans` (por defecto: `bilateral`).
 - `--metric`: Métrica objetivo para guiar la optimización. Opciones válidas: `mse` (minimiza el Error Cuadrático Medio), `snr` (maximiza la Relación Señal-Ruido), `piqe` (minimiza PIQE, métrica perceptual no-referencia) (por defecto: `mse`).
-- `--noise-sigma`: Nivel (desviación estándar) del ruido Gaussiano sintético que se inyectará a la imagen (por defecto: `25.0`).
+- `--noise-type`: Tipo de ruido sintético a aplicar. Opciones: `gaussian` (por defecto) o `sp` (sal y pimienta).
+- `--noise-sigma`: Desviación estándar del ruido Gaussiano (solo aplica si `--noise-type` es `gaussian`) (por defecto: `25.0`).
+- `--noise-amount`: Proporción de píxeles afectados por el ruido Sal y Pimienta (solo aplica si `--noise-type` es `sp`) (por defecto: `0.05`).
 - `--population`: Tamaño de la población (número de agentes/pulpos) para el OOA (por defecto: `30`).
 - `--iterations`: Número máximo de iteraciones del algoritmo (por defecto: `50`).
 - `--seed`: Semilla aleatoria (entero) para asegurar la reproducibilidad de los resultados experimentales.
@@ -75,4 +77,8 @@ python main.py cere.png --filter anisotropic --metric piqe --population 40 --ite
 python main.py cere.png --filter nlmeans --metric mse --population 40 --iterations 30 --seed 42
 python main.py cere.png --filter nlmeans --metric snr --population 40 --iterations 30 --seed 42
 python main.py cere.png --filter nlmeans --metric piqe --population 40 --iterations 30 --seed 42
+
+# Ejemplos con Ruido Sal y Pimienta (Salt & Pepper)
+python main.py cere.png --filter anisotropic --noise-type sp --noise-amount 0.05 --metric snr
+python main.py cere.png --filter nlmeans --noise-type sp --noise-amount 0.10 --metric piqe
 ```
