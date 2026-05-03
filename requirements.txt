@@ -3,3 +3,4 @@ opencv-python
 matplotlib
 scikit-image
 scipy
+pypiqe

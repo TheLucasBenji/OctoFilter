@@ -78,7 +78,7 @@ def show_results(
     ax_conv.set_ylabel(f"{metric_name} (costo)")
     
     # Si la métrica es MSE (baja), invertimos el eje Y para que se vea en ascenso
-    if metric_name.upper() == "MSE":
+    if metric_name.upper() in ("MSE", "PIQE"):
         ax_conv.invert_yaxis()
         
     ax_conv.grid(True, alpha=0.3)
