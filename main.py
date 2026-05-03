@@ -24,7 +24,7 @@ import numpy as np
 
 from ooa.algorithm import ooa
 from imaging.noise import add_gaussian_noise
-from imaging.metrics import mse, snr
+from imaging.metrics import mse, snr, piqe
 from filters import bilateral, anisotropic, nlmeans
 from visualization.display import show_results
 
@@ -48,9 +48,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--metric",
         type=str,
-        choices=["mse", "snr"],
+        choices=["mse", "snr", "piqe"],
         default="mse",
-        help="Métrica a optimizar: 'mse' (minimizar) o 'snr' (maximizar) (default: mse)",
+        help="Métrica a optimizar: 'mse' (minimizar), 'snr' (maximizar) o 'piqe' (minimizar, no-referencia) (default: mse)",
     )
     parser.add_argument(
         "--noise-sigma",
@@ -101,7 +101,8 @@ def main() -> None:
     noisy = add_gaussian_noise(image, sigma=args.noise_sigma, rng=rng)
     noisy_mse = mse(image, noisy)
     noisy_snr = snr(image, noisy)
-    print(f"Ruido añadido (σ={args.noise_sigma})  →  MSE={noisy_mse:.2f}, SNR={noisy_snr:.2f} dB")
+    noisy_piqe = piqe(noisy)
+    print(f"Ruido añadido (σ={args.noise_sigma})  →  MSE={noisy_mse:.2f}, SNR={noisy_snr:.2f} dB, PIQE={noisy_piqe:.2f}")
 
     # --- Seleccionar módulo de filtro ---
     if args.filter == "bilateral":
@@ -126,11 +127,13 @@ def main() -> None:
 
     # --- Función objetivo ---
     def objective(params: np.ndarray) -> float:
-        """Aplica el filtro con los parámetros dados y retorna el costo (MSE o -SNR)."""
+        """Aplica el filtro con los parámetros dados y retorna el costo (MSE, -SNR o PIQE)."""
         filtered = filter_mod.apply(noisy, params)
         if args.metric == "snr":
             # OOA minimiza, por lo que para maximizar SNR retornamos su negativo
             return -snr(image, filtered)
+        elif args.metric == "piqe":
+            return piqe(filtered)
         else:
             return mse(image, filtered)
 
@@ -141,12 +144,13 @@ def main() -> None:
         filtered_best = filter_mod.apply(noisy, best_pos)
         current_mse = mse(image, filtered_best)
         current_snr = snr(image, filtered_best)
-        
+        current_piqe = piqe(filtered_best)
+
         cost_str = f"{-best_cost if args.metric == 'snr' else best_cost:>10.4f}"
-        
+
         print(
             f"  Iter {iteration:>3d}/{args.iterations}  |  "
-            f"MSE={current_mse:>10.4f}  |  SNR={current_snr:>7.2f} dB  |  "
+            f"MSE={current_mse:>10.4f}  |  SNR={current_snr:>7.2f} dB  |  PIQE={current_piqe:>6.2f}  |  "
             f"Costo={cost_str}  |  "
             f"Params: {params_str}  |  "
             f"t={elapsed:.1f}s"
@@ -176,7 +180,18 @@ def main() -> None:
     best_filtered = filter_mod.apply(noisy, best_pos)
     final_mse = mse(image, best_filtered)
     final_snr = snr(image, best_filtered)
+    final_piqe = piqe(best_filtered)
     params_str = filter_mod.format_params(best_pos)
+
+    if args.metric == "snr":
+        improvement_pct = (final_snr - noisy_snr) / abs(noisy_snr) * 100
+        improvement_label = "Mejora SNR"
+    elif args.metric == "piqe":
+        improvement_pct = (noisy_piqe - final_piqe) / noisy_piqe * 100
+        improvement_label = "Mejora PIQE"
+    else:
+        improvement_pct = (noisy_mse - final_mse) / noisy_mse * 100
+        improvement_label = "Mejora MSE"
 
     print(f"\n{'─' * 50}")
     print(f"  RESULTADOS FINALES")
@@ -185,18 +200,22 @@ def main() -> None:
     print(f"  MSE  (optimizado):    {final_mse:.4f}")
     print(f"  SNR  (con ruido):     {noisy_snr:.2f} dB")
     print(f"  SNR  (optimizado):    {final_snr:.2f} dB")
+    print(f"  PIQE (con ruido):     {noisy_piqe:.2f}")
+    print(f"  PIQE (optimizado):    {final_piqe:.2f}")
     print(f"  Mejores parámetros:   {params_str}")
-    print(f"  Mejora MSE:           {((noisy_mse - final_mse) / noisy_mse * 100):.1f}%")
+    print(f"  {improvement_label}:           {improvement_pct:.1f}%")
     print(f"{'─' * 50}\n")
 
     # --- Mostrar ---
     metrics = {
-        "Métrica Objetivo": "SNR" if args.metric == "snr" else "MSE",
+        "Métrica Objetivo": args.metric.upper(),
         "MSE (con ruido)": noisy_mse,
         "MSE (optimizado)": final_mse,
         "SNR (con ruido) [dB]": noisy_snr,
         "SNR (optimizado) [dB]": final_snr,
-        "Mejora MSE [%]": (noisy_mse - final_mse) / noisy_mse * 100,
+        "PIQE (con ruido)": noisy_piqe,
+        "PIQE (optimizado)": final_piqe,
+        f"{improvement_label} [%]": improvement_pct,
     }
     
     # Si optimizamos SNR, el costo que grafica OOA es negativo.
@@ -212,7 +231,7 @@ def main() -> None:
         metrics=metrics,
         best_params_str=params_str,
         filter_name=filter_name,
-        metric_name="SNR" if args.metric == "snr" else "MSE",
+        metric_name=args.metric.upper(),
     )
 
 

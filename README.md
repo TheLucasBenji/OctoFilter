@@ -4,7 +4,7 @@
 
 Este repositorio contiene la implementación en Python del algoritmo **Octopus Optimization Algorithm (OOA)**, desarrollado como parte de un proyecto de tesis universitaria. 
 
-El objetivo principal de esta investigación y desarrollo es explorar el uso de algoritmos de **Inteligencia de Enjambre (*Swarm Intelligence*)** y metaheurísticas inspiradas en la naturaleza específicamente el comportamiento inteligente de forrajeo de los pulpos para la optimización automática de parámetros en filtros digitales de imágenes (como el filtro Bilateral, la Difusión Anisotrópica y Non-Local Means). El sistema busca restaurar imágenes degradadas con ruido, ajustando dinámicamente los parámetros para minimizar el Error Cuadrático Medio (MSE) y maximizar la Relación Señal-Ruido (SNR).
+El objetivo principal de esta investigación y desarrollo es explorar el uso de algoritmos de **Inteligencia de Enjambre (*Swarm Intelligence*)** y metaheurísticas inspiradas en la naturaleza específicamente el comportamiento inteligente de forrajeo de los pulpos para la optimización automática de parámetros en filtros digitales de imágenes (como el filtro Bilateral, la Difusión Anisotrópica y Non-Local Means). El sistema busca restaurar imágenes degradadas con ruido, ajustando dinámicamente los parámetros para minimizar el Error Cuadrático Medio (MSE), maximizar la Relación Señal-Ruido (SNR) o minimizar el PIQE (Perception-based Image Quality Evaluator), una métrica perceptual no-referencia.
 
 Este trabajo representa una adaptación y un *port* a Python orientado al procesamiento de imágenes, basado en el código matemático original.
 
@@ -53,14 +53,26 @@ El script expone múltiples argumentos para afinar la experimentación:
 
 - `image` *(posicional)*: Ruta de la imagen original a procesar (obligatorio).
 - `--filter`: Filtro a optimizar. Opciones válidas: `bilateral`, `anisotropic`, `nlmeans` (por defecto: `bilateral`).
-- `--metric`: Métrica objetivo para guiar la optimización. Opciones válidas: `mse` (minimiza el Error Cuadrático Medio), `snr` (maximiza la Relación Señal-Ruido) (por defecto: `mse`).
+- `--metric`: Métrica objetivo para guiar la optimización. Opciones válidas: `mse` (minimiza el Error Cuadrático Medio), `snr` (maximiza la Relación Señal-Ruido), `piqe` (minimiza PIQE, métrica perceptual no-referencia) (por defecto: `mse`).
 - `--noise-sigma`: Nivel (desviación estándar) del ruido Gaussiano sintético que se inyectará a la imagen (por defecto: `25.0`).
 - `--population`: Tamaño de la población (número de agentes/pulpos) para el OOA (por defecto: `30`).
 - `--iterations`: Número máximo de iteraciones del algoritmo (por defecto: `50`).
 - `--seed`: Semilla aleatoria (entero) para asegurar la reproducibilidad de los resultados experimentales.
 
-**Ejemplo de ejecución con parámetros personalizados:**
+**Ejemplos por filtro y métrica:**
 ```bash
-python main.py cere.png --filter anisotropic --metric snr --noise-sigma 30 --population 40 --iterations 50
-python main.py cere.png --filter nlmeans --metric snr --noise-sigma 30 --population 40 --iterations 50
+# Filtro Bilateral
+python main.py cere.png --filter bilateral --metric mse  --noise-sigma 25 --population 30 --iterations 50 --seed 42
+python main.py cere.png --filter bilateral --metric snr  --noise-sigma 25 --population 30 --iterations 50 --seed 42
+python main.py cere.png --filter bilateral --metric piqe --noise-sigma 25 --population 30 --iterations 50 --seed 42
+
+# Difusión Anisotrópica (Perona-Malik)
+python main.py cere.png --filter anisotropic --metric mse  --noise-sigma 30 --population 40 --iterations 50 --seed 42
+python main.py cere.png --filter anisotropic --metric snr  --noise-sigma 30 --population 40 --iterations 50 --seed 42
+python main.py cere.png --filter anisotropic --metric piqe --noise-sigma 30 --population 40 --iterations 50 --seed 42
+
+# Non-Local Means
+python main.py cere.png --filter nlmeans --metric mse  --noise-sigma 30 --population 40 --iterations 50 --seed 42
+python main.py cere.png --filter nlmeans --metric snr  --noise-sigma 30 --population 40 --iterations 50 --seed 42
+python main.py cere.png --filter nlmeans --metric piqe --noise-sigma 30 --population 40 --iterations 50 --seed 42
 ```
