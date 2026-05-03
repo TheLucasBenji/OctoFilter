@@ -69,10 +69,12 @@ def _levy_flight(dim: int, beta: float = 1.5, rng: Optional[np.random.Generator]
         / (gamma((1 + beta) / 2) * beta * 2 ** ((beta - 1) / 2))
     ) ** (1 / beta)
 
-    u = rng.standard_normal(dim) * sigma
-    v = rng.standard_normal(dim)
-    step = u / np.abs(v) ** (1 / beta)
-    return step
+    u = np.abs(rng.standard_normal(dim)) * sigma
+    v = np.abs(rng.standard_normal(dim))
+
+    step = u / (v ** (1 / beta) + 1e-10)
+    
+    return np.clip(step, 0.01, 1.5)
 
 
 def _exchange(octopus_list: list[OctopusHead]) -> None:
@@ -217,9 +219,10 @@ def ooa(
                         local_best_idx = int(np.argmin(tent_costs))
                         
                         direccion = pBest - head.tentacles[local_best_idx].pos
-                        # Si la diferencia es casi nula, inyectar un micro-movimiento
+                        
+                        # Rescate proporcional al 5% del espacio real
                         if np.linalg.norm(direccion) < 1e-5:
-                            direccion = (rng.random(dim) - 0.5) * 1e-3
+                            direccion = (rng.random(dim) - 0.5) * (ub - lb) * 0.05
                             
                         new_pos = (
                             tent.pos
@@ -229,10 +232,16 @@ def ooa(
                         )
                     else:
                         # Exploración: moverse relativo a la cabeza usando vuelo de Lévy
+                        direccion_exp = head.pos - tent.pos
+                        
+                        # Rescate proporcional al 5% del espacio real
+                        if np.linalg.norm(direccion_exp) < 1e-5:
+                            direccion_exp = (rng.random(dim) - 0.5) * (ub - lb) * 0.05
+                            
                         new_pos = (
                             head.pos
                             + rng.random()
-                            * (head.pos - tent.pos)
+                            * direccion_exp
                             * _levy_flight(dim, rng=rng)
                         )
 
@@ -249,10 +258,11 @@ def ooa(
             _exchange(octopus)
 
             # ----- Fase 2: Fase de exploradores -----
-            head_costs_arr = np.array([h.cost for h in octopus])
-            sorted_indices = np.argsort(head_costs_arr)
-
             for z in range(len(scouts)):
+
+                head_costs_arr = np.array([h.cost for h in octopus])
+                sorted_indices = np.argsort(head_costs_arr)
+                
                 if z == 0:
                     flag_idx = sorted_indices[0]            # mejor cabeza
                 elif z == 1:
