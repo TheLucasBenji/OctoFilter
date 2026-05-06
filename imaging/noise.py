@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import numpy as np
 from skimage.util import random_noise
+
+
 def add_gaussian_noise(
     image: np.ndarray,
     sigma: float = 25.0,
@@ -29,6 +31,10 @@ def add_gaussian_noise(
     np.ndarray
         Imagen con ruido (uint8), restringida a [0, 255].
     """
+    sigma = float(sigma)
+    if sigma < 0.0 or not np.isfinite(sigma):
+        raise ValueError("sigma debe ser un valor finito mayor o igual a 0")
+
     if rng is None:
         rng = np.random.default_rng()
 
@@ -58,6 +64,13 @@ def add_salt_and_pepper_noise(
     np.ndarray
         Imagen con ruido (uint8), restringida a [0, 255].
     """
+    amount = float(amount)
+    if not 0.0 <= amount <= 1.0:
+        raise ValueError("amount debe estar entre 0 y 1")
+
+    if amount == 0.0:
+        return image.copy()
+
     # random_noise devuelve float en rango [0, 1]
     noisy = random_noise(image, mode='s&p', amount=amount, rng=rng)
-    return np.clip(noisy * 255, 0, 255).astype(np.uint8)
+    return np.rint(np.clip(noisy * 255, 0, 255)).astype(np.uint8)

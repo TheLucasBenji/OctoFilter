@@ -18,6 +18,7 @@ from __future__ import annotations
 import argparse
 import sys
 import time
+from typing import Callable
 
 import cv2
 import numpy as np
@@ -28,6 +29,30 @@ from imaging.noise import add_gaussian_noise, add_salt_and_pepper_noise
 from imaging.metrics import mse, snr, piqe
 from filters import bilateral, anisotropic, nlmeans
 from visualization.display import show_results
+
+
+def _non_negative_float(value: str) -> float:
+    parsed = float(value)
+    if parsed < 0.0 or not np.isfinite(parsed):
+        raise argparse.ArgumentTypeError("debe ser un número finito mayor o igual a 0")
+    return parsed
+
+
+def _unit_interval_float(value: str) -> float:
+    parsed = float(value)
+    if not 0.0 <= parsed <= 1.0:
+        raise argparse.ArgumentTypeError("debe estar entre 0 y 1")
+    return parsed
+
+
+def _min_int(minimum: int) -> Callable[[str], int]:
+    def parse(value: str) -> int:
+        parsed = int(value)
+        if parsed < minimum:
+            raise argparse.ArgumentTypeError(f"debe ser un entero mayor o igual a {minimum}")
+        return parsed
+
+    return parse
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -62,25 +87,25 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--noise-amount",
-        type=float,
+        type=_unit_interval_float,
         default=0.05,
         help="Proporción para ruido sal y pimienta (default: 0.05)",
     )
     parser.add_argument(
         "--noise-sigma",
-        type=float,
+        type=_non_negative_float,
         default=25.0,
         help="Desviación estándar del ruido gaussiano (default: 25)",
     )
     parser.add_argument(
         "--population",
-        type=int,
+        type=_min_int(9),
         default=30,
         help="Tamaño de la población OOA (default: 30)",
     )
     parser.add_argument(
         "--iterations",
-        type=int,
+        type=_min_int(1),
         default=50,
         help="Número máximo de iteraciones OOA (default: 50)",
     )
@@ -114,7 +139,7 @@ def main() -> None:
     # --- Añadir ruido ---
     if args.noise_type == "gaussian":
         noisy = add_gaussian_noise(image, sigma=args.noise_sigma, rng=rng)
-        noise_info = f"Gaussiano (σ={args.noise_sigma})"
+        noise_info = f"Gaussiano (sigma={args.noise_sigma})"
     else:
         noisy = add_salt_and_pepper_noise(image, amount=args.noise_amount, rng=rng)
         noise_info = f"Sal y Pimienta (proporción={args.noise_amount})"
@@ -126,7 +151,7 @@ def main() -> None:
     noisy_mse = mse(image, noisy)
     noisy_snr = snr(image, noisy)
     noisy_piqe = piqe(noisy)
-    print(f"Ruido añadido: {noise_info}  →  MSE={noisy_mse:.2f}, SNR={noisy_snr:.2f} dB, PIQE={noisy_piqe:.2f}")
+    print(f"Ruido añadido: {noise_info}  ->  MSE={noisy_mse:.2f}, SNR={noisy_snr:.2f} dB, PIQE={noisy_piqe:.2f}")
 
     # --- Seleccionar módulo de filtro ---
     if args.filter == "bilateral":
@@ -229,25 +254,37 @@ def main() -> None:
     print(f"\nOptimización completada en {total_time:.1f}s")
 
     # --- Resultados finales ---
-    best_filtered = filter_mod.apply(noisy, best_pos)
-    final_mse = mse(image, best_filtered)
-    final_snr = snr(image, best_filtered)
-    final_piqe = piqe(best_filtered)
+    best_filtered = filter_mod.apply(noisy_f32, best_pos)
+    best_filtered_uint8 = np.clip(best_filtered, 0, 255).astype(np.uint8)
+    final_mse = mse(image_f32, best_filtered)
+    final_snr = snr(image_f32, best_filtered)
+    final_piqe = piqe(best_filtered_uint8)
     params_str = filter_mod.format_params(best_pos)
 
+    def percent_change(delta: float, baseline: float) -> float | None:
+        if baseline == 0.0 or not np.isfinite(baseline):
+            return None
+
+        value = delta / baseline * 100
+        if not np.isfinite(value):
+            return None
+        return float(value)
+
     if args.metric == "snr":
-        improvement_pct = (final_snr - noisy_snr) / abs(noisy_snr) * 100
+        improvement_pct = percent_change(final_snr - noisy_snr, abs(noisy_snr))
         improvement_label = "Mejora SNR"
     elif args.metric == "piqe":
-        improvement_pct = (noisy_piqe - final_piqe) / noisy_piqe * 100
+        improvement_pct = percent_change(noisy_piqe - final_piqe, noisy_piqe)
         improvement_label = "Mejora PIQE"
     else:
-        improvement_pct = (noisy_mse - final_mse) / noisy_mse * 100
+        improvement_pct = percent_change(noisy_mse - final_mse, noisy_mse)
         improvement_label = "Mejora MSE"
+    improvement_value = improvement_pct if improvement_pct is not None else "N/A"
+    improvement_text = f"{improvement_pct:.1f}%" if improvement_pct is not None else "N/A"
 
-    print(f"\n{'─' * 50}")
+    print(f"\n{'-' * 50}")
     print(f"  RESULTADOS FINALES")
-    print(f"{'─' * 50}")
+    print(f"{'-' * 50}")
     print(f"  MSE  (con ruido):     {noisy_mse:.4f}")
     print(f"  MSE  (optimizado):    {final_mse:.4f}")
     print(f"  SNR  (con ruido):     {noisy_snr:.2f} dB")
@@ -255,8 +292,8 @@ def main() -> None:
     print(f"  PIQE (con ruido):     {noisy_piqe:.2f}")
     print(f"  PIQE (optimizado):    {final_piqe:.2f}")
     print(f"  Mejores parámetros:   {params_str}")
-    print(f"  {improvement_label}:           {improvement_pct:.1f}%")
-    print(f"{'─' * 50}\n")
+    print(f"  {improvement_label}:           {improvement_text}")
+    print(f"{'-' * 50}\n")
 
     # --- Mostrar ---
     metrics = {
@@ -267,7 +304,7 @@ def main() -> None:
         "SNR (optimizado) [dB]": final_snr,
         "PIQE (con ruido)": noisy_piqe,
         "PIQE (optimizado)": final_piqe,
-        f"{improvement_label} [%]": improvement_pct,
+        f"{improvement_label} [%]": improvement_value,
     }
     
     # Si optimizamos SNR, el costo que grafica OOA es negativo.
@@ -278,7 +315,7 @@ def main() -> None:
     show_results(
         original=image,
         noisy=noisy,
-        optimised=best_filtered,
+        optimised=best_filtered_uint8,
         convergence=convergence,
         metrics=metrics,
         best_params_str=params_str,

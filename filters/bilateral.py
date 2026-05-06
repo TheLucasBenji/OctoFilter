@@ -2,9 +2,9 @@
 Envoltorio de filtro bilateral para cv2.bilateralFilter.
 
 Parámetros a optimizar (3 dimensiones):
-    x[0]  →  d        (diámetro de la vecindad de píxeles), int en [3, 15], impar
-    x[1]  →  sigmaColor  (sigma del filtro en el espacio de color), float en [10, 200]
-    x[2]  →  sigmaSpace  (sigma del filtro en el espacio de coordenadas), float en [10, 200]
+    x[0]  ->  d        (diámetro de la vecindad de píxeles), int en [3, 15], impar
+    x[1]  ->  sigmaColor  (sigma del filtro en el espacio de color), float en [10, 200]
+    x[2]  ->  sigmaSpace  (sigma del filtro en el espacio de coordenadas), float en [10, 200]
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ import cv2
 LOWER_BOUNDS = np.array([3.0, 10.0, 10.0])
 UPPER_BOUNDS = np.array([15.0, 200.0, 200.0])
 DIM = 3
-PARAM_NAMES = ["d (diameter)", "σ Color", "σ Space"]
+PARAM_NAMES = ["d (diameter)", "sigma Color", "sigma Space"]
 
 
 def _get_d(val: float) -> int:
@@ -56,4 +56,4 @@ def apply(image: np.ndarray, params: np.ndarray) -> np.ndarray:
 def format_params(params: np.ndarray) -> str:
     """Representación legible para humanos de los parámetros."""
     d = _get_d(params[0])
-    return f"d={d}, σColor={params[1]:.2f}, σSpace={params[2]:.2f}"
+    return f"d={d}, sigmaColor={params[1]:.2f}, sigmaSpace={params[2]:.2f}"
