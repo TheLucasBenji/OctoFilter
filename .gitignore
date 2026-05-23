@@ -10,6 +10,9 @@ ENV/
 env.bak/
 venv.bak/
 
+# Python virtual envs created by tools
+.venv/
+
 # macOS
 .DS_Store
 .AppleDouble
@@ -20,6 +23,33 @@ venv.bak/
 .idea/
 *.swp
 
+# VSCode workspace files
+.vscode/*
+!.vscode/settings.json
+
+/frontend/node_modules/
+node_modules/
+
+# Logs
+*.log
+pip-log.txt
+
+# Testing and caches
+.pytest_cache/
+.mypy_cache/
+__pypackages__/
+.cache/
+
+# Coverage
+.coverage
+coverage.xml
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Packaging
+pip-wheel-metadata/
+
 # Distribution / packaging
 dist/
 build/
@@ -29,6 +59,18 @@ build/
 .env
 .venv
 
+# dotenv local files
+.env.local
+.env.*.local
+
 # Custom
 MOOA/
 .MOOA/
+
+# macOS
+.DS_Store
+
+# Build outputs
+dist/
+build/
+out/
