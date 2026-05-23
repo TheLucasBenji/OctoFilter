@@ -6,6 +6,7 @@ import queue
 import sys
 import threading
 import uuid
+from dataclasses import dataclass
 from typing import Optional
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -42,7 +43,18 @@ FILTER_LABELS = {
     "nlmeans": "Non-Local Means",
 }
 
-jobs: dict[str, queue.Queue] = {}
+
+@dataclass
+class OptimizationJob:
+    queue: queue.Queue
+    cancelled: threading.Event
+
+
+class OptimizationCancelled(Exception):
+    pass
+
+
+jobs: dict[str, OptimizationJob] = {}
 
 
 def encode_image(img: np.ndarray) -> str:
@@ -67,6 +79,7 @@ def run_optimization(
     iterations: int,
     seed: Optional[int],
     q: queue.Queue,
+    cancelled: threading.Event,
 ):
     try:
         fmod = FILTER_MODULES[filter_type]
@@ -89,8 +102,14 @@ def run_optimization(
         noisy_f32 = noisy.astype(np.float32)
         original_f32 = original.astype(np.float32)
 
+        def check_cancelled():
+            if cancelled.is_set():
+                raise OptimizationCancelled()
+
         def objective(params: np.ndarray) -> float:
+            check_cancelled()
             filtered = fmod.apply(noisy_f32, params)
+            check_cancelled()
             if metric == "mse":
                 return img_metrics.mse(original_f32, filtered)
             elif metric == "snr":
@@ -101,6 +120,7 @@ def run_optimization(
             return img_metrics.mse(original_f32, filtered)
 
         def on_iter(iteration: int, best_cost: float, _best_pos: np.ndarray):
+            check_cancelled()
             q.put_nowait({
                 "type": "progress",
                 "iteration": iteration,
@@ -118,6 +138,7 @@ def run_optimization(
             rng=rng,
         )
 
+        check_cancelled()
         result = fmod.apply(noisy_f32, best_pos)
         result_u8 = np.clip(result, 0, 255).astype(np.uint8)
 
@@ -149,6 +170,8 @@ def run_optimization(
             },
             "params": {name: float(val) for name, val in zip(fmod.PARAM_NAMES, best_pos)},
         })
+    except OptimizationCancelled:
+        q.put_nowait({"type": "cancelled"})
     except Exception as exc:
         import traceback
         q.put_nowait({"type": "error", "message": str(exc), "trace": traceback.format_exc()})
@@ -221,11 +244,12 @@ async def start_optimize(
 
     job_id = str(uuid.uuid4())
     q: queue.Queue = queue.Queue()
-    jobs[job_id] = q
+    cancelled = threading.Event()
+    jobs[job_id] = OptimizationJob(queue=q, cancelled=cancelled)
 
     threading.Thread(
         target=run_optimization,
-        args=(job_id, original, noisy, filter_type, metric, population, iterations, seed, q),
+        args=(job_id, original, noisy, filter_type, metric, population, iterations, seed, q, cancelled),
         daemon=True,
     ).start()
 
@@ -236,12 +260,23 @@ async def start_optimize(
     }
 
 
-@app.get("/api/optimize/{job_id}/stream")
-async def stream_optimize(job_id: str):
-    q = jobs.get(job_id)
-    if q is None:
+@app.post("/api/optimize/{job_id}/cancel")
+async def cancel_optimize(job_id: str):
+    job = jobs.get(job_id)
+    if job is None:
         raise HTTPException(404, "Job not found")
 
+    job.cancelled.set()
+    return {"status": "cancelling"}
+
+
+@app.get("/api/optimize/{job_id}/stream")
+async def stream_optimize(job_id: str):
+    job = jobs.get(job_id)
+    if job is None:
+        raise HTTPException(404, "Job not found")
+
+    q = job.queue
     loop = asyncio.get_event_loop()
 
     def poll():
@@ -257,7 +292,7 @@ async def stream_optimize(job_id: str):
                 yield 'data: {"type":"ping"}\n\n'
             else:
                 yield f"data: {json.dumps(event)}\n\n"
-                if event.get("type") in ("complete", "error"):
+                if event.get("type") in ("complete", "error", "cancelled"):
                     jobs.pop(job_id, None)
                     break
 

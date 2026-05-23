@@ -65,10 +65,12 @@ export default function App() {
   const [currentIteration, setCurrentIteration] = useState(0);
   const [result, setResult] = useState<OptimizationResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [activeJobId, setActiveJobId] = useState<string | null>(null);
 
   const fileRef = useRef<File | null>(null);
   const evsRef = useRef<EventSource | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cancelRequestedRef = useRef(false);
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -134,8 +136,10 @@ export default function App() {
   const handleRun = useCallback(async () => {
     if (!fileRef.current) return;
     evsRef.current?.close();
+    cancelRequestedRef.current = false;
 
     setAppState('optimizing');
+    setActiveJobId(null);
     setConvergence([]);
     setCurrentIteration(0);
     setResult(null);
@@ -158,6 +162,7 @@ export default function App() {
       const r = await fetch(`${API}/api/optimize`, { method: 'POST', body: fd });
       const d = await r.json();
       jobId = d.job_id;
+      setActiveJobId(jobId);
       setOriginalImage(d.original_image);
       setNoisyImage(d.noisy_image);
     } catch (e) {
@@ -179,22 +184,61 @@ export default function App() {
         setResult(ev as OptimizationResult);
         setConvergence(ev.convergence.map((c: number, i: number) => ({ iteration: i + 1, cost: c })));
         setAppState('complete');
+        setActiveJobId(null);
+        cancelRequestedRef.current = false;
         evs.close();
       } else if (ev.type === 'error') {
         setError(ev.message);
         setAppState('error');
+        setActiveJobId(null);
+        cancelRequestedRef.current = false;
+        evs.close();
+      } else if (ev.type === 'cancelled') {
+        setAppState(fileRef.current ? 'previewing' : 'idle');
+        setCurrentIteration(0);
+        setConvergence([]);
+        setResult(null);
+        setResultImage(null);
+        setError(null);
+        setActiveJobId(null);
+        cancelRequestedRef.current = false;
         evs.close();
       }
     };
 
     evs.onerror = () => {
-      if (appState !== 'complete') {
+      if (cancelRequestedRef.current) {
+        setAppState(fileRef.current ? 'previewing' : 'idle');
+        setActiveJobId(null);
+        cancelRequestedRef.current = false;
+      } else {
         setError('Backend connection lost.');
         setAppState('error');
+        setActiveJobId(null);
       }
       evs.close();
     };
-  }, [params, appState]);
+  }, [params]);
+
+  const handleCancel = useCallback(async () => {
+    if (!activeJobId || appState !== 'optimizing') return;
+
+    cancelRequestedRef.current = true;
+    try {
+      const response = await fetch(`${API}/api/optimize/${activeJobId}/cancel`, {
+        method: 'POST',
+      });
+      if (!response.ok) {
+        throw new Error(`No se pudo cancelar la optimización (${response.status}).`);
+      }
+    } catch (e) {
+      cancelRequestedRef.current = false;
+      evsRef.current?.close();
+      setActiveJobId(null);
+      setError(e instanceof Error ? e.message : String(e));
+      setAppState('error');
+    }
+  }, [activeJobId, appState]);
 
   return (
     <div className="app">
@@ -232,28 +276,6 @@ export default function App() {
         </div>
 
         <div className="header-actions">
-          <div className="header-status">
-            {appState === 'idle' && 'esperando imagen'}
-            {appState === 'previewing' && 'previsualización lista'}
-            {appState === 'optimizing' && (
-              <>
-                <span className="dot dot-amber" />
-                iter {currentIteration} / {params.iterations}
-              </>
-            )}
-            {appState === 'complete' && (
-              <>
-                <span className="dot dot-green" />
-                listo
-              </>
-            )}
-            {appState === 'error' && (
-              <>
-                <span className="dot dot-red" />
-                error
-              </>
-            )}
-          </div>
           <button
             type="button"
             className="theme-toggle"
@@ -271,6 +293,7 @@ export default function App() {
           params={params}
           onChange={setParams}
           onRun={handleRun}
+          onCancel={handleCancel}
           canRun={!!originalImage && appState !== 'optimizing'}
           appState={appState}
           currentIteration={currentIteration}

@@ -228,17 +228,6 @@ select:focus-visible {
   gap: 10px;
 }
 
-.header-status {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 11px;
-  font-family: var(--mono);
-  color: var(--t3);
-  min-width: 132px;
-  justify-content: flex-end;
-}
-
 .theme-toggle {
   width: 30px;
   height: 30px;
@@ -733,10 +722,57 @@ input[type="range"]:disabled { opacity: 0.3; cursor: not-allowed; }
 .run-btn:active:not(:disabled) { transform: scale(0.98); }
 .run-btn:disabled { opacity: 0.35; cursor: not-allowed; }
 
-.run-btn.busy {
+.run-busy {
+  width: 100%;
+  height: 36px;
+  padding: 0 5px 0 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
   background: var(--raised);
   color: var(--a);
   border: 1px solid var(--a-glo);
+  border-radius: var(--r);
+}
+
+.run-busy-label {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.stop-btn {
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line-md);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--red);
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s, color 0.12s, transform 0.12s;
+}
+
+.stop-btn:hover {
+  background: var(--red-dim);
+  border-color: color-mix(in srgb, var(--red) 42%, transparent);
+  color: var(--red);
+}
+
+.stop-btn:active {
+  transform: scale(0.94);
+}
+
+.stop-btn svg {
+  width: 15px;
+  height: 15px;
 }
 
 .sb-run {
