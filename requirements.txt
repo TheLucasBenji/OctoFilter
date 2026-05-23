@@ -5,3 +5,6 @@ scikit-image
 scipy
 pypiqe
 PyWavelets
+fastapi
+uvicorn[standard]
+python-multipart
