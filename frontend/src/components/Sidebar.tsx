@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { FaRegCircleStop } from 'react-icons/fa6';
 import {
   AppParams,
   AppState,
@@ -17,6 +18,7 @@ interface Props {
   params: AppParams;
   onChange: (p: AppParams) => void;
   onRun: () => void;
+  onCancel: () => void;
   canRun: boolean;
   appState: AppState;
   currentIteration: number;
@@ -57,6 +59,7 @@ function RunBlock({
   currentIteration,
   iterations,
   onRun,
+  onCancel,
 }: {
   locked: boolean;
   canRun: boolean;
@@ -64,6 +67,7 @@ function RunBlock({
   currentIteration: number;
   iterations: number;
   onRun: () => void;
+  onCancel: () => void;
 }) {
   const pct = appState === 'optimizing'
     ? Math.round((currentIteration / (iterations || 1)) * 100)
@@ -71,13 +75,31 @@ function RunBlock({
 
   return (
     <div className="sb-group sb-run">
-      <button
-        className={`run-btn${locked ? ' busy' : ''}`}
-        onClick={onRun}
-        disabled={!canRun}
-      >
-        {locked ? <><div className="spinner" />Optimizando...</> : 'Ejecutar'}
-      </button>
+      {locked ? (
+        <div className="run-busy">
+          <span className="run-busy-label">
+            <span className="spinner" />
+            Optimizando...
+          </span>
+          <button
+            type="button"
+            className="stop-btn"
+            onClick={onCancel}
+            aria-label="Cancelar optimización"
+            title="Cancelar optimización"
+          >
+            <FaRegCircleStop aria-hidden="true" />
+          </button>
+        </div>
+      ) : (
+        <button
+          className="run-btn"
+          onClick={onRun}
+          disabled={!canRun}
+        >
+          Ejecutar
+        </button>
+      )}
 
       {(locked || appState === 'complete') && (
         <div className="progress-wrap">
@@ -100,6 +122,7 @@ export default function Sidebar({
   params,
   onChange,
   onRun,
+  onCancel,
   canRun,
   appState,
   currentIteration,
@@ -204,6 +227,7 @@ export default function Sidebar({
             currentIteration={currentIteration}
             iterations={params.iterations}
             onRun={onRun}
+            onCancel={onCancel}
           />
         </>
       ) : (
@@ -348,6 +372,7 @@ export default function Sidebar({
             currentIteration={currentIteration}
             iterations={params.iterations}
             onRun={onRun}
+            onCancel={onCancel}
           />
         </>
       )}
