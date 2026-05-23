@@ -16,6 +16,7 @@ que minimicen el MSE o maximicen el SNR entre la imagen filtrada y la original.
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 import time
 from typing import Callable
@@ -23,6 +24,8 @@ from typing import Callable
 import cv2
 import numpy as np
 from skimage.restoration import estimate_sigma
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from ooa.algorithm import ooa
 from imaging.noise import add_gaussian_noise, add_salt_and_pepper_noise

@@ -1,0 +1,268 @@
+import asyncio
+import base64
+import json
+import os
+import queue
+import sys
+import threading
+import uuid
+from typing import Optional
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+import cv2
+import numpy as np
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
+
+from filters import anisotropic, bilateral, nlmeans
+from imaging import metrics as img_metrics
+from imaging import noise as img_noise
+from ooa.algorithm import ooa
+
+app = FastAPI(title="Octopus API")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+FILTER_MODULES = {
+    "bilateral": bilateral,
+    "anisotropic": anisotropic,
+    "nlmeans": nlmeans,
+}
+
+FILTER_LABELS = {
+    "bilateral": "Bilateral",
+    "anisotropic": "Anisotropic Diffusion",
+    "nlmeans": "Non-Local Means",
+}
+
+jobs: dict[str, queue.Queue] = {}
+
+
+def encode_image(img: np.ndarray) -> str:
+    if img.dtype != np.uint8:
+        img = np.clip(img, 0, 255).astype(np.uint8)
+    _, buf = cv2.imencode(".png", img)
+    return base64.b64encode(buf).decode()
+
+
+def decode_image(data: bytes) -> np.ndarray:
+    arr = np.frombuffer(data, np.uint8)
+    return cv2.imdecode(arr, cv2.IMREAD_GRAYSCALE)
+
+
+def run_optimization(
+    job_id: str,
+    original: np.ndarray,
+    noisy: np.ndarray,
+    filter_type: str,
+    metric: str,
+    population: int,
+    iterations: int,
+    seed: Optional[int],
+    q: queue.Queue,
+):
+    try:
+        fmod = FILTER_MODULES[filter_type]
+        rng = np.random.default_rng(seed)
+
+        lb = fmod.LOWER_BOUNDS.copy()
+        ub = fmod.UPPER_BOUNDS.copy()
+
+        noise_estimate = float(np.std(noisy.astype(np.float32) - original.astype(np.float32)))
+
+        if filter_type == "bilateral":
+            lb[1] = max(10.0, noise_estimate * 0.5)
+            ub[1] = min(200.0, noise_estimate * 3.0)
+            lb[2] = max(10.0, noise_estimate * 0.5)
+            ub[2] = min(200.0, noise_estimate * 3.0)
+        elif filter_type == "anisotropic":
+            lb[1] = max(10.0, noise_estimate * 0.5)
+            ub[1] = min(100.0, noise_estimate * 3.0)
+
+        noisy_f32 = noisy.astype(np.float32)
+        original_f32 = original.astype(np.float32)
+
+        def objective(params: np.ndarray) -> float:
+            filtered = fmod.apply(noisy_f32, params)
+            if metric == "mse":
+                return img_metrics.mse(original_f32, filtered)
+            elif metric == "snr":
+                return -img_metrics.snr(original_f32, filtered)
+            elif metric == "piqe":
+                u8 = np.clip(filtered, 0, 255).astype(np.uint8)
+                return img_metrics.piqe(u8)
+            return img_metrics.mse(original_f32, filtered)
+
+        def on_iter(iteration: int, best_cost: float, _best_pos: np.ndarray):
+            q.put_nowait({
+                "type": "progress",
+                "iteration": iteration,
+                "cost": float(best_cost),
+            })
+
+        best_cost, best_pos, convergence = ooa(
+            n_population=population,
+            max_iter=iterations,
+            lb=lb,
+            ub=ub,
+            dim=fmod.DIM,
+            objective_fn=objective,
+            on_iteration=on_iter,
+            rng=rng,
+        )
+
+        result = fmod.apply(noisy_f32, best_pos)
+        result_u8 = np.clip(result, 0, 255).astype(np.uint8)
+
+        mse_val = img_metrics.mse(original_f32, result)
+        snr_val = img_metrics.snr(original_f32, result)
+        noisy_mse = img_metrics.mse(original_f32, noisy_f32)
+        noisy_snr = img_metrics.snr(original_f32, noisy_f32)
+
+        try:
+            piqe_result = img_metrics.piqe(result_u8)
+            piqe_noisy = img_metrics.piqe(np.clip(noisy, 0, 255).astype(np.uint8))
+        except Exception:
+            piqe_result = None
+            piqe_noisy = None
+
+        q.put_nowait({
+            "type": "complete",
+            "result_image": encode_image(result_u8),
+            "convergence": [float(c) for c in convergence],
+            "metrics": {
+                "mse": float(mse_val),
+                "snr": float(snr_val),
+                "piqe": float(piqe_result) if piqe_result is not None else None,
+                "noisy_mse": float(noisy_mse),
+                "noisy_snr": float(noisy_snr),
+                "noisy_piqe": float(piqe_noisy) if piqe_noisy is not None else None,
+                "best_cost": float(best_cost),
+                "metric_used": metric,
+            },
+            "params": {name: float(val) for name, val in zip(fmod.PARAM_NAMES, best_pos)},
+        })
+    except Exception as exc:
+        import traceback
+        q.put_nowait({"type": "error", "message": str(exc), "trace": traceback.format_exc()})
+
+
+@app.get("/api/filters")
+def get_filters():
+    return {
+        key: {
+            "label": FILTER_LABELS[key],
+            "dim": mod.DIM,
+            "params": [
+                {"name": name, "lb": float(lb), "ub": float(ub)}
+                for name, lb, ub in zip(mod.PARAM_NAMES, mod.LOWER_BOUNDS, mod.UPPER_BOUNDS)
+            ],
+        }
+        for key, mod in FILTER_MODULES.items()
+    }
+
+
+@app.post("/api/preview-noise")
+async def preview_noise(
+    image: UploadFile = File(...),
+    noise_type: str = Form("gaussian"),
+    noise_sigma: float = Form(25.0),
+    noise_amount: float = Form(0.05),
+    seed: Optional[int] = Form(None),
+):
+    data = await image.read()
+    img = decode_image(data)
+    if img is None:
+        raise HTTPException(400, "Invalid image")
+
+    rng = np.random.default_rng(seed)
+    if noise_type == "gaussian":
+        noisy = img_noise.add_gaussian_noise(img, sigma=noise_sigma, rng=rng)
+    else:
+        noisy = img_noise.add_salt_and_pepper_noise(img, amount=noise_amount, rng=rng)
+
+    return {
+        "noisy_image": encode_image(noisy),
+        "original_image": encode_image(img),
+        "noisy_mse": float(img_metrics.mse(img.astype(np.float32), noisy.astype(np.float32))),
+        "noisy_snr": float(img_metrics.snr(img.astype(np.float32), noisy.astype(np.float32))),
+    }
+
+
+@app.post("/api/optimize")
+async def start_optimize(
+    image: UploadFile = File(...),
+    filter_type: str = Form("bilateral"),
+    metric: str = Form("mse"),
+    noise_type: str = Form("gaussian"),
+    noise_sigma: float = Form(25.0),
+    noise_amount: float = Form(0.05),
+    population: int = Form(30),
+    iterations: int = Form(50),
+    seed: Optional[int] = Form(None),
+):
+    data = await image.read()
+    original = decode_image(data)
+    if original is None:
+        raise HTTPException(400, "Invalid image")
+
+    rng_noise = np.random.default_rng(seed)
+    if noise_type == "gaussian":
+        noisy = img_noise.add_gaussian_noise(original, sigma=noise_sigma, rng=rng_noise)
+    else:
+        noisy = img_noise.add_salt_and_pepper_noise(original, amount=noise_amount, rng=rng_noise)
+
+    job_id = str(uuid.uuid4())
+    q: queue.Queue = queue.Queue()
+    jobs[job_id] = q
+
+    threading.Thread(
+        target=run_optimization,
+        args=(job_id, original, noisy, filter_type, metric, population, iterations, seed, q),
+        daemon=True,
+    ).start()
+
+    return {
+        "job_id": job_id,
+        "noisy_image": encode_image(noisy),
+        "original_image": encode_image(original),
+    }
+
+
+@app.get("/api/optimize/{job_id}/stream")
+async def stream_optimize(job_id: str):
+    q = jobs.get(job_id)
+    if q is None:
+        raise HTTPException(404, "Job not found")
+
+    loop = asyncio.get_event_loop()
+
+    def poll():
+        try:
+            return q.get(timeout=0.2)
+        except Exception:
+            return None
+
+    async def generator():
+        while True:
+            event = await loop.run_in_executor(None, poll)
+            if event is None:
+                yield 'data: {"type":"ping"}\n\n'
+            else:
+                yield f"data: {json.dumps(event)}\n\n"
+                if event.get("type") in ("complete", "error"):
+                    jobs.pop(job_id, None)
+                    break
+
+    return StreamingResponse(
+        generator(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
