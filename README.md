@@ -1,84 +1,65 @@
-# Optimización de Filtros de Imagen con OOA
+# Octopus — Optimización de Filtros de Imagen
 
-## Sobre el Proyecto
+Este repositorio contiene una implementación en Python del **Octopus Optimization
+Algorithm (OOA)** aplicada a la optimización automática de parámetros de filtros
+de imagen. El proyecto ha evolucionado desde una herramienta CLI hacia una
+aplicación full-stack con API y una interfaz web interactiva.
 
-Este repositorio contiene la implementación en Python del algoritmo **Octopus Optimization Algorithm (OOA)**, desarrollado como parte de un proyecto de tesis universitaria. 
-
-El objetivo principal de esta investigación y desarrollo es explorar el uso de algoritmos de **Inteligencia de Enjambre (*Swarm Intelligence*)** y metaheurísticas inspiradas en la naturaleza específicamente el comportamiento inteligente de forrajeo de los pulpos para la optimización automática de parámetros en filtros digitales de imágenes (como el filtro Bilateral, la Difusión Anisotrópica y Non-Local Means). El sistema busca restaurar imágenes degradadas con ruido, ajustando dinámicamente los parámetros para minimizar el Error Cuadrático Medio (MSE), maximizar la Relación Señal-Ruido (SNR) o minimizar el PIQE (Perception-based Image Quality Evaluator), una métrica perceptual no-referencia.
-
-Este trabajo representa una adaptación y un *port* a Python orientado al procesamiento de imágenes, basado en el código matemático original.
-
-**Referencia**: [Repositorio original de OOA](https://github.com/Chrisong-gh/MOOA)
-**Paper Base**: *Octopus optimization algorithm: A novel single- and multi-objective optimization algorithm for optimization problems* (Song, M., et al., 2025).
+**Referencias**: [Repositorio original de OOA](https://github.com/Chrisong-gh/MOOA)
 
 ---
 
-## Instalación y Uso
+## Qué hay de nuevo
 
-### 1. Preparar el entorno virtual
+- Interfaz web (frontend) desarrollada con React + Vite en `frontend/`.
+- API backend con `FastAPI` en `backend/main.py` que expone endpoints para
+  previsualizar ruido y lanzar optimizaciones.
+- Script `run.sh` para arrancar backend y frontend simultáneamente.
+- Documentación legacy del CLI movida a [backend/README.md](backend/README.md).
 
-Para aislar las dependencias del proyecto, es altamente recomendable utilizar un entorno virtual de Python. Desde tu terminal, en la raíz del proyecto, ejecuta:
+## Inicio rápido
+
+La forma más sencilla de levantar la aplicación (backend + frontend) es usar
+el script de conveniencia:
 
 ```bash
-# Crear entorno virtual
+./run.sh
+```
+
+El script instalará dependencias frontend si es necesario y arrancará:
+
+- UI: http://localhost:5173
+- API (docs): http://localhost:8000/docs
+
+Si prefieres hacerlo manualmente:
+
+```bash
 python3 -m venv venv
-
-# Activar el entorno virtual (Mac/Linux)
 source venv/bin/activate
-
-# En Windows: venv\Scripts\activate
-
-# Instalar las dependencias requeridas
 pip install -r requirements.txt
+
+# Backend (FastAPI)
+uvicorn backend.main:app --port 8000 --reload
+
+# Frontend (en otra terminal)
+cd frontend
+npm install
+npm run dev
 ```
 
-### 2. Ejecutar la optimización
+## Estructura principal
 
-La herramienta de optimización se lanza a través del script `main.py`. Solo necesitas indicar la ruta de la imagen que deseas procesar.
+- `backend/` — API FastAPI, filtros y lógica de optimización.
+- `frontend/` — Interfaz web en React + Vite.
+- `filters/`, `imaging/`, `ooa/`, `visualization/` — módulos de procesamiento.
+- `requirements.txt` — dependencias de Python.
+- `run.sh` — script para arrancar backend y frontend.
 
-```bash
-# Ejecutar optimización con el filtro bilateral (comportamiento por defecto)
-python main.py cere.png
+## API relevante
 
-# Ejecutar optimización con el filtro de difusión anisotrópica
-python main.py cere.png --filter anisotropic
+El backend expone varios endpoints (ver documentación automática):
 
-# Ejecutar optimización con el filtro Non-Local Means
-python main.py cere.png --filter nlmeans
-```
-
-### Opciones de línea de comandos
-
-El script expone múltiples argumentos para afinar la experimentación:
-
-- `image` *(posicional)*: Ruta de la imagen original a procesar (obligatorio).
-- `--filter`: Filtro a optimizar. Opciones válidas: `bilateral`, `anisotropic`, `nlmeans` (por defecto: `bilateral`).
-- `--metric`: Métrica objetivo para guiar la optimización. Opciones válidas: `mse` (minimiza el Error Cuadrático Medio), `snr` (maximiza la Relación Señal-Ruido), `piqe` (minimiza PIQE, métrica perceptual no-referencia) (por defecto: `mse`).
-- `--noise-type`: Tipo de ruido sintético a aplicar. Opciones: `gaussian` (por defecto) o `sp` (sal y pimienta).
-- `--noise-sigma`: Desviación estándar del ruido Gaussiano (solo aplica si `--noise-type` es `gaussian`) (por defecto: `25.0`).
-- `--noise-amount`: Proporción de píxeles afectados por el ruido Sal y Pimienta (solo aplica si `--noise-type` es `sp`) (por defecto: `0.05`).
-- `--population`: Tamaño de la población (número de agentes/pulpos) para el OOA (por defecto: `30`).
-- `--iterations`: Número máximo de iteraciones del algoritmo (por defecto: `50`).
-- `--seed`: Semilla aleatoria (entero) para asegurar la reproducibilidad de los resultados experimentales.
-
-**Ejemplos por filtro y métrica:**
-```bash
-# Filtro Bilateral
-python main.py cere.png --filter bilateral --metric mse --population 30 --iterations 30 --seed 42
-python main.py cere.png --filter bilateral --metric snr --population 30 --iterations 30 --seed 42
-python main.py cere.png --filter bilateral --metric piqe --population 30 --iterations 30 --seed 42
-
-# Difusión Anisotrópica (Perona-Malik)
-python main.py cere.png --filter anisotropic --metric mse --population 40 --iterations 30 --seed 42
-python main.py cere.png --filter anisotropic --metric snr --population 40 --iterations 30 --seed 42
-python main.py cere.png --filter anisotropic --metric piqe --population 40 --iterations 30 --seed 42
-
-# Non-Local Means
-python main.py cere.png --filter nlmeans --metric mse --population 40 --iterations 30 --seed 42
-python main.py cere.png --filter nlmeans --metric snr --population 40 --iterations 30 --seed 42
-python main.py cere.png --filter nlmeans --metric piqe --population 40 --iterations 30 --seed 42
-
-# Ejemplos con Ruido Sal y Pimienta (Salt & Pepper)
-python main.py cere.png --filter anisotropic --noise-type sp --noise-amount 0.05 --metric snr
-python main.py cere.png --filter nlmeans --noise-type sp --noise-amount 0.10 --metric piqe
-```
+- `GET /api/filters` — lista filtros y parámetros.
+- `POST /api/preview-noise` — genera una imagen con ruido de ejemplo.
+- `POST /api/optimize` — inicia una optimización (retorna `job_id`).
+- `GET /api/optimize/{job_id}/stream` — stream SSE con progreso y resultado.
