@@ -4,15 +4,18 @@ import {
   AuthUser,
   AppParams,
   AppState,
+  AppView,
   OptimizationResult,
   ConvergencePoint,
   ConfigMode,
   ThemePreference,
+  HistoryDetail,
 } from './types';
 import Sidebar from './components/Sidebar';
 import ImageWorkspace from './components/ImageWorkspace';
 import AnalysisSection from './components/AnalysisSection';
 import LoginScreen from './components/LoginScreen';
+import HistoryView from './components/HistoryView';
 
 const API = 'http://localhost:8000';
 const octopusLogo = new URL('./public/octopus.svg', import.meta.url).href;
@@ -60,6 +63,7 @@ function ThemeIcon({ theme }: { theme: ThemePreference }) {
 export default function App() {
   const [authStatus, setAuthStatus] = useState<AuthStatus>('checking');
   const [authUser, setAuthUser] = useState<AuthUser | null>(null);
+  const [view, setView] = useState<AppView>('workspace');
   const [params, setParams] = useState<AppParams>(DEFAULT_PARAMS);
   const [configMode, setConfigMode] = useState<ConfigMode>('basic');
   const [theme, setTheme] = useState<ThemePreference>(getInitialTheme);
@@ -360,6 +364,21 @@ export default function App() {
     }
   }, [activeJobId, appState, clearWorkspace]);
 
+  const handleLoadConfig = useCallback((detail: HistoryDetail) => {
+    setParams({
+      filterType: detail.filter_type,
+      metricType: detail.metric_type,
+      noiseType: detail.noise_type,
+      noiseSigma: detail.noise_sigma,
+      noiseAmount: detail.noise_amount,
+      population: detail.population,
+      iterations: detail.iterations,
+      seed: detail.seed !== null ? String(detail.seed) : '',
+    });
+    setConfigMode('advanced');
+    setView('workspace');
+  }, []);
+
   if (authStatus === 'checking') {
     return (
       <div className="auth-loading">
@@ -427,6 +446,19 @@ export default function App() {
           <span className="user-pill" title={authUser.email}>{authUser.email}</span>
           <button
             type="button"
+            className={`history-toggle-btn${view === 'history' ? ' active' : ''}`}
+            onClick={() => setView(v => v === 'workspace' ? 'history' : 'workspace')}
+            aria-label="Historial"
+            title="Historial de optimizaciones"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 8v4l3 3" />
+              <path d="M3.05 11a9 9 0 1 1 .5 4" />
+              <polyline points="3 7 3 11 7 11" />
+            </svg>
+          </button>
+          <button
+            type="button"
             className="logout-btn"
             onClick={handleLogout}
             aria-label="Cerrar sesión"
@@ -459,23 +491,33 @@ export default function App() {
         />
 
         <main className="main">
-          {error && <div className="err-banner">{error}</div>}
-
-          <ImageWorkspace
-            appState={appState}
-            originalImage={originalImage}
-            noisyImage={noisyImage}
-            resultImage={resultImage}
-            onFileUpload={handleFileUpload}
-          />
-
-          {(convergence.length > 0 || result) && (
-            <AnalysisSection
-              convergence={convergence}
-              result={result}
-              metricType={params.metricType}
-              totalIterations={params.iterations}
+          {view === 'history' ? (
+            <HistoryView
+              apiBase={API}
+              onLoadConfig={handleLoadConfig}
+              onAuthExpired={handleAuthExpired}
             />
+          ) : (
+            <>
+              {error && <div className="err-banner">{error}</div>}
+
+              <ImageWorkspace
+                appState={appState}
+                originalImage={originalImage}
+                noisyImage={noisyImage}
+                resultImage={resultImage}
+                onFileUpload={handleFileUpload}
+              />
+
+              {(convergence.length > 0 || result) && (
+                <AnalysisSection
+                  convergence={convergence}
+                  result={result}
+                  metricType={params.metricType}
+                  totalIterations={params.iterations}
+                />
+              )}
+            </>
           )}
         </main>
       </div>

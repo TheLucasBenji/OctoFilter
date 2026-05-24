@@ -5,6 +5,7 @@ import os
 import queue
 import sys
 import threading
+import time
 import uuid
 from dataclasses import dataclass
 from typing import Optional
@@ -13,7 +14,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import cv2
 import numpy as np
-from fastapi import Cookie, Depends, FastAPI, File, Form, HTTPException, Response, UploadFile
+from fastapi import Cookie, Depends, FastAPI, File, Form, HTTPException, Query, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
@@ -26,6 +27,7 @@ from auth import (
     init_auth_db,
     revoke_session,
 )
+import history as hist_mod
 from filters import anisotropic, bilateral, nlmeans
 from imaging import metrics as img_metrics
 from imaging import noise as img_noise
@@ -150,6 +152,11 @@ def run_optimization(
     seed: Optional[int],
     q: queue.Queue,
     cancelled: threading.Event,
+    user_id: int,
+    started_at: float,
+    params_req: dict,
+    original_bytes: bytes,
+    noisy_bytes: bytes,
 ):
     try:
         fmod = FILTER_MODULES[filter_type]
@@ -224,21 +231,46 @@ def run_optimization(
             piqe_result = None
             piqe_noisy = None
 
+        complete_metrics = {
+            "mse": float(mse_val),
+            "snr": float(snr_val),
+            "piqe": float(piqe_result) if piqe_result is not None else None,
+            "noisy_mse": float(noisy_mse),
+            "noisy_snr": float(noisy_snr),
+            "noisy_piqe": float(piqe_noisy) if piqe_noisy is not None else None,
+            "best_cost": float(best_cost),
+            "metric_used": metric,
+        }
+        complete_params = {name: float(val) for name, val in zip(fmod.PARAM_NAMES, best_pos)}
+        complete_convergence = [float(c) for c in convergence]
+
+        try:
+            _, result_buf = cv2.imencode(".png", result_u8)
+            hist_mod.save_optimization(
+                user_id,
+                params_req=params_req,
+                result_payload={
+                    "metrics": complete_metrics,
+                    "params": complete_params,
+                    "convergence": complete_convergence,
+                },
+                images={
+                    "original": original_bytes,
+                    "noisy": noisy_bytes,
+                    "result": result_buf.tobytes(),
+                },
+                duration_ms=int((time.time() - started_at) * 1000),
+            )
+        except Exception:
+            import traceback as _tb
+            print(_tb.format_exc(), flush=True)
+
         q.put_nowait({
             "type": "complete",
             "result_image": encode_image(result_u8),
-            "convergence": [float(c) for c in convergence],
-            "metrics": {
-                "mse": float(mse_val),
-                "snr": float(snr_val),
-                "piqe": float(piqe_result) if piqe_result is not None else None,
-                "noisy_mse": float(noisy_mse),
-                "noisy_snr": float(noisy_snr),
-                "noisy_piqe": float(piqe_noisy) if piqe_noisy is not None else None,
-                "best_cost": float(best_cost),
-                "metric_used": metric,
-            },
-            "params": {name: float(val) for name, val in zip(fmod.PARAM_NAMES, best_pos)},
+            "convergence": complete_convergence,
+            "metrics": complete_metrics,
+            "params": complete_params,
         })
     except OptimizationCancelled:
         q.put_nowait({"type": "cancelled"})
@@ -314,6 +346,22 @@ async def start_optimize(
     else:
         noisy = img_noise.add_salt_and_pepper_noise(original, amount=noise_amount, rng=rng_noise)
 
+    _, orig_buf = cv2.imencode(".png", original)
+    _, noisy_buf = cv2.imencode(".png", noisy)
+    original_bytes = orig_buf.tobytes()
+    noisy_bytes = noisy_buf.tobytes()
+
+    params_req = {
+        "filter_type": filter_type,
+        "metric": metric,
+        "noise_type": noise_type,
+        "noise_sigma": noise_sigma,
+        "noise_amount": noise_amount,
+        "population": population,
+        "iterations": iterations,
+        "seed": seed,
+    }
+
     job_id = str(uuid.uuid4())
     q: queue.Queue = queue.Queue()
     cancelled = threading.Event()
@@ -321,7 +369,11 @@ async def start_optimize(
 
     threading.Thread(
         target=run_optimization,
-        args=(job_id, original, noisy, filter_type, metric, population, iterations, seed, q, cancelled),
+        args=(
+            job_id, original, noisy, filter_type, metric, population, iterations, seed,
+            q, cancelled,
+            _user["id"], time.time(), params_req, original_bytes, noisy_bytes,
+        ),
         daemon=True,
     ).start()
 
@@ -373,3 +425,26 @@ async def stream_optimize(job_id: str, _user: dict = Depends(require_user)):
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+@app.get("/api/history")
+def list_history(
+    user: dict = Depends(require_user),
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+):
+    return hist_mod.list_optimizations(user["id"], limit=limit, offset=offset)
+
+
+@app.get("/api/history/{opt_id}")
+def get_history_item(opt_id: int, user: dict = Depends(require_user)):
+    item = hist_mod.get_optimization(user["id"], opt_id)
+    if item is None:
+        raise HTTPException(404, "Not found")
+    return item
+
+
+@app.delete("/api/history/{opt_id}", status_code=204)
+def delete_history_item(opt_id: int, user: dict = Depends(require_user)):
+    if not hist_mod.delete_optimization(user["id"], opt_id):
+        raise HTTPException(404, "Not found")
