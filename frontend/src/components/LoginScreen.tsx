@@ -9,6 +9,7 @@ import {
   FiSun,
 } from 'react-icons/fi';
 import { AuthUser, ThemePreference } from '../types';
+import OctopusViz from './OctopusViz';
 
 interface Props {
   apiBase: string;
@@ -184,43 +185,7 @@ export default function LoginScreen({
             </p>
           </div>
 
-          <svg className="auth-octomap" viewBox="0 0 520 360" role="img">
-            <defs>
-              <linearGradient id="auth-head" x1="0" x2="1" y1="0" y2="1">
-                <stop offset="0%" stopColor="#b7adff" />
-                <stop offset="100%" stopColor="#5b3df5" />
-              </linearGradient>
-            </defs>
-
-            {[
-              [258, 174, 92, 34, 134, 66],
-              [258, 174, 154, 76, 198, 92],
-              [258, 174, 220, 74, 244, 112],
-              [258, 174, 332, 70, 294, 112],
-              [258, 174, 404, 82, 348, 92],
-              [258, 174, 424, 230, 352, 232],
-              [258, 174, 276, 300, 278, 240],
-              [258, 174, 126, 242, 194, 232],
-            ].map(([sx, sy, ex, ey, cx, cy], index) => (
-              <g key={`${ex}-${ey}`}>
-                <path
-                  d={`M ${sx} ${sy} Q ${cx} ${cy} ${ex} ${ey}`}
-                  className="auth-arm"
-                  style={{ animationDelay: `${index * 120}ms` }}
-                />
-                <circle cx={ex} cy={ey} r="5" className="auth-arm-point" />
-                <text x={ex + 10} y={ey + 4} className="auth-arm-label">
-                  p{index + 1}
-                </text>
-              </g>
-            ))}
-
-            <circle cx="258" cy="174" r="30" fill="url(#auth-head)" />
-            <circle cx="258" cy="174" r="47" className="auth-best-ring" />
-            <text x="258" y="109" className="auth-best-label" textAnchor="middle">
-              best cost
-            </text>
-          </svg>
+          <OctopusViz />
 
           <div className="auth-visual-meta">
             <span>AD · BF · NLM</span>
