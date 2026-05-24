@@ -23,6 +23,12 @@ La forma más sencilla de levantar la aplicación (backend + frontend) es usar
 el script de conveniencia:
 
 ```bash
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+```
+
+```bash
 ./run.sh
 ```
 
