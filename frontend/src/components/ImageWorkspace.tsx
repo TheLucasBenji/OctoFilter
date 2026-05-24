@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback } from 'react';
+import { VscArrowBoth } from 'react-icons/vsc';
 import { AppState } from '../types';
 
 interface Props {
@@ -54,7 +55,9 @@ function CompareSlider({ original, noisy }: { original: string; noisy: string })
 
       {/* Handle */}
       <div className="compare-handle" style={{ left: `${pct}%` }}>
-        <div className="compare-knob">⟺</div>
+        <div className="compare-knob">
+          <VscArrowBoth aria-hidden="true" />
+        </div>
       </div>
 
       {/* Labels */}

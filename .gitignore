@@ -34,6 +34,11 @@ node_modules/
 *.log
 pip-log.txt
 
+# Local SQLite data
+*.sqlite
+*.sqlite3
+backend/data/
+
 # Testing and caches
 .pytest_cache/
 .mypy_cache/

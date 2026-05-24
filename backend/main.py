@@ -13,10 +13,19 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import cv2
 import numpy as np
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import Cookie, Depends, FastAPI, File, Form, HTTPException, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
 
+from auth import (
+    COOKIE_NAME,
+    authenticate_user,
+    create_session,
+    get_user_for_session,
+    init_auth_db,
+    revoke_session,
+)
 from filters import anisotropic, bilateral, nlmeans
 from imaging import metrics as img_metrics
 from imaging import noise as img_noise
@@ -26,7 +35,8 @@ app = FastAPI(title="Octopus API")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -57,6 +67,40 @@ class OptimizationCancelled(Exception):
 jobs: dict[str, OptimizationJob] = {}
 
 
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+    remember: bool = True
+
+
+@app.on_event("startup")
+def startup():
+    init_auth_db()
+
+
+def set_session_cookie(response: Response, token: str, max_age: Optional[int]) -> None:
+    response.set_cookie(
+        key=COOKIE_NAME,
+        value=token,
+        max_age=max_age,
+        path="/",
+        httponly=True,
+        secure=False,
+        samesite="lax",
+    )
+
+
+def clear_session_cookie(response: Response) -> None:
+    response.delete_cookie(key=COOKIE_NAME, path="/")
+
+
+def require_user(session_token: Optional[str] = Cookie(default=None, alias=COOKIE_NAME)) -> dict:
+    user = get_user_for_session(session_token)
+    if user is None:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    return user
+
+
 def encode_image(img: np.ndarray) -> str:
     if img.dtype != np.uint8:
         img = np.clip(img, 0, 255).astype(np.uint8)
@@ -67,6 +111,32 @@ def encode_image(img: np.ndarray) -> str:
 def decode_image(data: bytes) -> np.ndarray:
     arr = np.frombuffer(data, np.uint8)
     return cv2.imdecode(arr, cv2.IMREAD_GRAYSCALE)
+
+
+@app.post("/api/auth/login")
+def login(payload: LoginRequest, response: Response):
+    user = authenticate_user(payload.email, payload.password)
+    if user is None:
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+
+    token, expires_at, max_age = create_session(user_id=user["id"], remember=payload.remember)
+    set_session_cookie(response, token, max_age)
+    return {"user": user, "expires_at": expires_at}
+
+
+@app.get("/api/auth/me")
+def me(user: dict = Depends(require_user)):
+    return {"user": user}
+
+
+@app.post("/api/auth/logout")
+def logout(
+    response: Response,
+    session_token: Optional[str] = Cookie(default=None, alias=COOKIE_NAME),
+):
+    revoke_session(session_token)
+    clear_session_cookie(response)
+    return {"status": "logged_out"}
 
 
 def run_optimization(
@@ -178,7 +248,7 @@ def run_optimization(
 
 
 @app.get("/api/filters")
-def get_filters():
+def get_filters(_user: dict = Depends(require_user)):
     return {
         key: {
             "label": FILTER_LABELS[key],
@@ -194,6 +264,7 @@ def get_filters():
 
 @app.post("/api/preview-noise")
 async def preview_noise(
+    _user: dict = Depends(require_user),
     image: UploadFile = File(...),
     noise_type: str = Form("gaussian"),
     noise_sigma: float = Form(25.0),
@@ -221,6 +292,7 @@ async def preview_noise(
 
 @app.post("/api/optimize")
 async def start_optimize(
+    _user: dict = Depends(require_user),
     image: UploadFile = File(...),
     filter_type: str = Form("bilateral"),
     metric: str = Form("mse"),
@@ -261,7 +333,7 @@ async def start_optimize(
 
 
 @app.post("/api/optimize/{job_id}/cancel")
-async def cancel_optimize(job_id: str):
+async def cancel_optimize(job_id: str, _user: dict = Depends(require_user)):
     job = jobs.get(job_id)
     if job is None:
         raise HTTPException(404, "Job not found")
@@ -271,7 +343,7 @@ async def cancel_optimize(job_id: str):
 
 
 @app.get("/api/optimize/{job_id}/stream")
-async def stream_optimize(job_id: str):
+async def stream_optimize(job_id: str, _user: dict = Depends(require_user)):
     job = jobs.get(job_id)
     if job is None:
         raise HTTPException(404, "Job not found")

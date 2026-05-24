@@ -1,5 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
+import { FiLogOut } from 'react-icons/fi';
 import {
+  AuthUser,
   AppParams,
   AppState,
   OptimizationResult,
@@ -10,6 +12,7 @@ import {
 import Sidebar from './components/Sidebar';
 import ImageWorkspace from './components/ImageWorkspace';
 import AnalysisSection from './components/AnalysisSection';
+import LoginScreen from './components/LoginScreen';
 
 const API = 'http://localhost:8000';
 const octopusLogo = new URL('./public/octopus.svg', import.meta.url).href;
@@ -26,6 +29,7 @@ const DEFAULT_PARAMS: AppParams = {
 };
 
 const THEME_STORAGE_KEY = 'octopus-theme';
+type AuthStatus = 'checking' | 'authenticated' | 'anonymous';
 
 function getInitialTheme(): ThemePreference {
   if (typeof window === 'undefined') return 'dark';
@@ -54,6 +58,8 @@ function ThemeIcon({ theme }: { theme: ThemePreference }) {
 }
 
 export default function App() {
+  const [authStatus, setAuthStatus] = useState<AuthStatus>('checking');
+  const [authUser, setAuthUser] = useState<AuthUser | null>(null);
   const [params, setParams] = useState<AppParams>(DEFAULT_PARAMS);
   const [configMode, setConfigMode] = useState<ConfigMode>('basic');
   const [theme, setTheme] = useState<ThemePreference>(getInitialTheme);
@@ -85,6 +91,63 @@ export default function App() {
     });
   }, []);
 
+  const clearWorkspace = useCallback(() => {
+    fileRef.current = null;
+    evsRef.current?.close();
+    cancelRequestedRef.current = false;
+    setAppState('idle');
+    setOriginalImage(null);
+    setNoisyImage(null);
+    setResultImage(null);
+    setConvergence([]);
+    setCurrentIteration(0);
+    setResult(null);
+    setError(null);
+    setActiveJobId(null);
+  }, []);
+
+  const handleAuthExpired = useCallback(() => {
+    clearWorkspace();
+    setAuthUser(null);
+    setAuthStatus('anonymous');
+  }, [clearWorkspace]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadSession() {
+      try {
+        const response = await fetch(`${API}/api/auth/me`, {
+          credentials: 'include',
+        });
+        if (cancelled) return;
+
+        if (response.ok) {
+          const data = (await response.json()) as { user: AuthUser };
+          setAuthUser(data.user);
+          setAuthStatus('authenticated');
+        } else {
+          setAuthUser(null);
+          setAuthStatus('anonymous');
+        }
+      } catch {
+        if (!cancelled) {
+          setAuthUser(null);
+          setAuthStatus('anonymous');
+        }
+      }
+    }
+
+    loadSession();
+    return () => { cancelled = true; };
+  }, []);
+
+  const handleAuthenticated = useCallback((user: AuthUser) => {
+    setAuthUser(user);
+    setAuthStatus('authenticated');
+    setError(null);
+  }, []);
+
   const handleConfigModeChange = useCallback((mode: ConfigMode) => {
     if (appState === 'optimizing') return;
     setConfigMode(mode);
@@ -109,12 +172,23 @@ export default function App() {
     fd.append('noise_amount', p.noiseAmount.toString());
     if (p.seed) fd.append('seed', p.seed);
     try {
-      const r = await fetch(`${API}/api/preview-noise`, { method: 'POST', body: fd });
+      const r = await fetch(`${API}/api/preview-noise`, {
+        method: 'POST',
+        credentials: 'include',
+        body: fd,
+      });
+      if (r.status === 401) {
+        handleAuthExpired();
+        return;
+      }
+      if (!r.ok) {
+        throw new Error(`No se pudo previsualizar el ruido (${r.status}).`);
+      }
       const d = await r.json();
       setOriginalImage(d.original_image);
       setNoisyImage(d.noisy_image);
     } catch { /* ignore */ }
-  }, []);
+  }, [handleAuthExpired]);
 
   const handleFileUpload = useCallback(async (file: File) => {
     fileRef.current = file;
@@ -159,7 +233,19 @@ export default function App() {
 
     let jobId: string;
     try {
-      const r = await fetch(`${API}/api/optimize`, { method: 'POST', body: fd });
+      const r = await fetch(`${API}/api/optimize`, {
+        method: 'POST',
+        credentials: 'include',
+        body: fd,
+      });
+      if (r.status === 401) {
+        handleAuthExpired();
+        return;
+      }
+      if (!r.ok) {
+        const d = await r.json().catch(() => null);
+        throw new Error(d?.detail ?? `No se pudo iniciar la optimización (${r.status}).`);
+      }
       const d = await r.json();
       jobId = d.job_id;
       setActiveJobId(jobId);
@@ -171,7 +257,9 @@ export default function App() {
       return;
     }
 
-    const evs = new EventSource(`${API}/api/optimize/${jobId}/stream`);
+    const evs = new EventSource(`${API}/api/optimize/${jobId}/stream`, {
+      withCredentials: true,
+    });
     evsRef.current = evs;
 
     evs.onmessage = (e) => {
@@ -218,7 +306,7 @@ export default function App() {
       }
       evs.close();
     };
-  }, [params]);
+  }, [handleAuthExpired, params]);
 
   const handleCancel = useCallback(async () => {
     if (!activeJobId || appState !== 'optimizing') return;
@@ -227,7 +315,12 @@ export default function App() {
     try {
       const response = await fetch(`${API}/api/optimize/${activeJobId}/cancel`, {
         method: 'POST',
+        credentials: 'include',
       });
+      if (response.status === 401) {
+        handleAuthExpired();
+        return;
+      }
       if (!response.ok) {
         throw new Error(`No se pudo cancelar la optimización (${response.status}).`);
       }
@@ -238,7 +331,62 @@ export default function App() {
       setError(e instanceof Error ? e.message : String(e));
       setAppState('error');
     }
-  }, [activeJobId, appState]);
+  }, [activeJobId, appState, handleAuthExpired]);
+
+  const handleLogout = useCallback(async () => {
+    const jobToCancel = activeJobId && appState === 'optimizing' ? activeJobId : null;
+
+    if (jobToCancel) {
+      cancelRequestedRef.current = true;
+      try {
+        await fetch(`${API}/api/optimize/${jobToCancel}/cancel`, {
+          method: 'POST',
+          credentials: 'include',
+        });
+      } catch { /* ignore logout cancellation failures */ }
+    }
+
+    evsRef.current?.close();
+
+    try {
+      await fetch(`${API}/api/auth/logout`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+    } finally {
+      clearWorkspace();
+      setAuthUser(null);
+      setAuthStatus('anonymous');
+    }
+  }, [activeJobId, appState, clearWorkspace]);
+
+  if (authStatus === 'checking') {
+    return (
+      <div className="auth-loading">
+        <span
+          className="auth-loading-logo"
+          style={{
+            WebkitMaskImage: `url(${octopusLogo})`,
+            maskImage: `url(${octopusLogo})`,
+          }}
+          aria-hidden="true"
+        />
+        <span>Comprobando sesión</span>
+      </div>
+    );
+  }
+
+  if (authStatus === 'anonymous' || !authUser) {
+    return (
+      <LoginScreen
+        apiBase={API}
+        logoUrl={octopusLogo}
+        theme={theme}
+        onThemeToggle={toggleTheme}
+        onAuthenticated={handleAuthenticated}
+      />
+    );
+  }
 
   return (
     <div className="app">
@@ -276,6 +424,16 @@ export default function App() {
         </div>
 
         <div className="header-actions">
+          <span className="user-pill" title={authUser.email}>{authUser.email}</span>
+          <button
+            type="button"
+            className="logout-btn"
+            onClick={handleLogout}
+            aria-label="Cerrar sesión"
+            title="Cerrar sesión"
+          >
+            <FiLogOut aria-hidden="true" />
+          </button>
           <button
             type="button"
             className="theme-toggle"
