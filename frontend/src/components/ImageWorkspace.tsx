@@ -8,6 +8,7 @@ interface Props {
   noisyImage: string | null;
   resultImage: string | null;
   onFileUpload: (file: File) => void;
+  readOnly?: boolean;
 }
 
 function CompareSlider({ original, noisy }: { original: string; noisy: string }) {
@@ -69,7 +70,7 @@ function CompareSlider({ original, noisy }: { original: string; noisy: string })
   );
 }
 
-export default function ImageWorkspace({ appState, originalImage, noisyImage, resultImage, onFileUpload }: Props) {
+export default function ImageWorkspace({ appState, originalImage, noisyImage, resultImage, onFileUpload, readOnly = false }: Props) {
   const [drag, setDrag] = useState(false);
 
   const handleFiles = (files: FileList | null) => {
@@ -105,12 +106,14 @@ export default function ImageWorkspace({ appState, originalImage, noisyImage, re
         ) : (
           <>
             <CompareSlider original={originalImage} noisy={noisyImage} />
-            <div className="change-img">
-              <label>
-                <input type="file" accept="image/*" onChange={e => handleFiles(e.target.files)} />
-                cambiar imagen
-              </label>
-            </div>
+            {!readOnly && (
+              <div className="change-img">
+                <label>
+                  <input type="file" accept="image/*" onChange={e => handleFiles(e.target.files)} />
+                  cambiar imagen
+                </label>
+              </div>
+            )}
           </>
         )}
       </div>

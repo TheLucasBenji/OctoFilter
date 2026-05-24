@@ -107,6 +107,32 @@ def init_auth_db() -> None:
 
             CREATE INDEX IF NOT EXISTS idx_sessions_user_id
               ON sessions(user_id);
+
+            CREATE TABLE IF NOT EXISTS optimizations (
+              id            INTEGER PRIMARY KEY AUTOINCREMENT,
+              user_id       INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+              created_at    TEXT    NOT NULL,
+              filter_type   TEXT    NOT NULL,
+              metric_type   TEXT    NOT NULL,
+              noise_type    TEXT    NOT NULL,
+              noise_sigma   REAL    NOT NULL,
+              noise_amount  REAL    NOT NULL,
+              population    INTEGER NOT NULL,
+              iterations    INTEGER NOT NULL,
+              seed          INTEGER,
+              params_json       TEXT NOT NULL,
+              metrics_json      TEXT NOT NULL,
+              convergence_json  TEXT NOT NULL,
+              best_cost     REAL    NOT NULL,
+              metric_used   TEXT    NOT NULL,
+              original_path TEXT,
+              noisy_path    TEXT,
+              result_path   TEXT,
+              duration_ms   INTEGER
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_optimizations_user_created
+              ON optimizations(user_id, created_at DESC);
             """
         )
 
