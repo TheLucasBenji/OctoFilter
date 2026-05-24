@@ -9,24 +9,22 @@ aplicación full-stack con API y una interfaz web interactiva.
 
 ---
 
-## Qué hay de nuevo
-
 - Interfaz web (frontend) desarrollada con React + Vite en `frontend/`.
 - API backend con `FastAPI` en `backend/main.py` que expone endpoints para
   previsualizar ruido y lanzar optimizaciones.
 - Script `run.sh` para arrancar backend y frontend simultáneamente.
 - Documentación legacy del CLI movida a [backend/README.md](backend/README.md).
 
-## Inicio rápido
+## Inicio
 
-La forma más sencilla de levantar la aplicación (backend + frontend) es usar
-el script de conveniencia:
-
+Descargar bibliotecas python (solo 1 vez)
 ```bash
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 ```
+La forma más sencilla de levantar la aplicación (backend + frontend) es usar
+el script de conveniencia:
 
 ```bash
 ./run.sh
