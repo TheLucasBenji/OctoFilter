@@ -4,6 +4,11 @@ export type NoiseType = 'gaussian' | 'sp';
 export type ConfigMode = 'basic' | 'advanced';
 export type ThemePreference = 'light' | 'dark';
 
+export interface AuthUser {
+  id: number;
+  email: string;
+}
+
 export interface AppParams {
   filterType: FilterType;
   metricType: MetricType;
