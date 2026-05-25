@@ -7,7 +7,7 @@ import sys
 import threading
 import time
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Optional
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -60,6 +60,8 @@ FILTER_LABELS = {
 class OptimizationJob:
     queue: queue.Queue
     cancelled: threading.Event
+    created_at: float = field(default_factory=time.time)
+    thread: Optional[threading.Thread] = None
 
 
 class OptimizationCancelled(Exception):
@@ -67,6 +69,16 @@ class OptimizationCancelled(Exception):
 
 
 jobs: dict[str, OptimizationJob] = {}
+
+JOB_TTL_SECONDS = 3600
+
+
+def _sweep_jobs() -> None:
+    for job_id, job in list(jobs.items()):
+        if time.time() - job.created_at > JOB_TTL_SECONDS and (
+            job.thread is None or not job.thread.is_alive()
+        ):
+            jobs.pop(job_id, None)
 
 
 class LoginRequest(BaseModel):
@@ -340,6 +352,21 @@ async def start_optimize(
     if original is None:
         raise HTTPException(400, "Invalid image")
 
+    if filter_type not in FILTER_MODULES:
+        raise HTTPException(400, f"filter_type inválido: '{filter_type}'")
+    if metric not in {"mse", "snr", "piqe"}:
+        raise HTTPException(400, f"metric inválido: '{metric}'")
+    if noise_type not in {"gaussian", "sp"}:
+        raise HTTPException(400, f"noise_type inválido: '{noise_type}'")
+    if not (9 <= population <= 200):
+        raise HTTPException(400, "population debe estar entre 9 y 200")
+    if not (1 <= iterations <= 500):
+        raise HTTPException(400, "iterations debe estar entre 1 y 500")
+    if noise_sigma < 0:
+        raise HTTPException(400, "noise_sigma debe ser >= 0")
+    if not (0.0 <= noise_amount <= 1.0):
+        raise HTTPException(400, "noise_amount debe estar entre 0 y 1")
+
     rng_noise = np.random.default_rng(seed)
     if noise_type == "gaussian":
         noisy = img_noise.add_gaussian_noise(original, sigma=noise_sigma, rng=rng_noise)
@@ -362,12 +389,14 @@ async def start_optimize(
         "seed": seed,
     }
 
+    _sweep_jobs()
     job_id = str(uuid.uuid4())
     q: queue.Queue = queue.Queue()
     cancelled = threading.Event()
-    jobs[job_id] = OptimizationJob(queue=q, cancelled=cancelled)
+    job = OptimizationJob(queue=q, cancelled=cancelled)
+    jobs[job_id] = job
 
-    threading.Thread(
+    t = threading.Thread(
         target=run_optimization,
         args=(
             job_id, original, noisy, filter_type, metric, population, iterations, seed,
@@ -375,7 +404,9 @@ async def start_optimize(
             _user["id"], time.time(), params_req, original_bytes, noisy_bytes,
         ),
         daemon=True,
-    ).start()
+    )
+    job.thread = t
+    t.start()
 
     return {
         "job_id": job_id,
@@ -401,7 +432,7 @@ async def stream_optimize(job_id: str, _user: dict = Depends(require_user)):
         raise HTTPException(404, "Job not found")
 
     q = job.queue
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
 
     def poll():
         try:
@@ -410,15 +441,17 @@ async def stream_optimize(job_id: str, _user: dict = Depends(require_user)):
             return None
 
     async def generator():
-        while True:
-            event = await loop.run_in_executor(None, poll)
-            if event is None:
-                yield 'data: {"type":"ping"}\n\n'
-            else:
-                yield f"data: {json.dumps(event)}\n\n"
-                if event.get("type") in ("complete", "error", "cancelled"):
-                    jobs.pop(job_id, None)
-                    break
+        try:
+            while True:
+                event = await loop.run_in_executor(None, poll)
+                if event is None:
+                    yield 'data: {"type":"ping"}\n\n'
+                else:
+                    yield f"data: {json.dumps(event)}\n\n"
+                    if event.get("type") in ("complete", "error", "cancelled"):
+                        break
+        finally:
+            jobs.pop(job_id, None)
 
     return StreamingResponse(
         generator(),

@@ -72,6 +72,10 @@ build/
 MOOA/
 .MOOA/
 
+# Playwright output
+test-results/
+playwright-report/
+
 # macOS
 .DS_Store
 
