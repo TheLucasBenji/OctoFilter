@@ -35,22 +35,15 @@ function CompareSlider({ original, noisy }: { original: string; noisy: string })
       {/* Base: noisy */}
       <img src={`data:image/png;base64,${noisy}`} alt="noisy" draggable={false} />
 
-      {/* Overlay: original (clipped) */}
+      {/* Overlay: original (clipped via clip-path) */}
       <div
         className="compare-overlay"
-        style={{ width: `${pct}%`, right: undefined }}
+        style={{ clipPath: `inset(0 ${100 - pct}% 0 0)` }}
       >
         <img
           src={`data:image/png;base64,${original}`}
           alt="original"
           draggable={false}
-          style={{
-            width: containerRef.current
-              ? `${containerRef.current.clientWidth}px`
-              : '100%',
-            maxHeight: 320,
-            objectFit: 'contain',
-          }}
         />
       </div>
 

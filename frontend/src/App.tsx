@@ -146,6 +146,8 @@ export default function App() {
     return () => { cancelled = true; };
   }, []);
 
+  useEffect(() => () => evsRef.current?.close(), []);
+
   const handleAuthenticated = useCallback((user: AuthUser) => {
     setAuthUser(user);
     setAuthStatus('authenticated');
@@ -267,7 +269,13 @@ export default function App() {
     evsRef.current = evs;
 
     evs.onmessage = (e) => {
-      const ev = JSON.parse(e.data);
+      let ev;
+      try {
+        ev = JSON.parse(e.data);
+      } catch {
+        console.warn('SSE: frame no-JSON ignorado', e.data);
+        return;
+      }
       if (ev.type === 'progress') {
         setCurrentIteration(ev.iteration);
         setConvergence(prev => [...prev, { iteration: ev.iteration, cost: ev.cost }]);
