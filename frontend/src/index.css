@@ -1377,6 +1377,7 @@ input[type="range"]:disabled { opacity: 0.3; cursor: not-allowed; }
 .compare-overlay {
   position: absolute;
   top: 0; left: 0; bottom: 0;
+  width: 100%;
   overflow: hidden;
   pointer-events: none;
 }

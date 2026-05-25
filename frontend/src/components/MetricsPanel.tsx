@@ -3,6 +3,7 @@ import { OptimizationResult, MetricType } from '../types';
 interface Props { result: OptimizationResult; metricType: MetricType; }
 
 function delta(before: number, after: number, lowerBetter: boolean) {
+  if (Math.abs(before) < 1e-10) return { label: '—', good: false };
   const pct = ((after - before) / Math.abs(before)) * 100;
   const good = lowerBetter ? pct < 0 : pct > 0;
   return { label: `${pct > 0 ? '+' : ''}${pct.toFixed(1)}%`, good };
@@ -20,9 +21,9 @@ function MetricTile({ label, value, unit, before, lowerBetter }: {
   const maxVal = lowerBetter ? before : value;
   const beforePct = lowerBetter
     ? 100
-    : Math.round((before / maxVal) * 100);
+    : maxVal > 0 ? Math.round((before / maxVal) * 100) : 100;
   const afterPct = lowerBetter
-    ? Math.round((value / before) * 100)
+    ? before > 0 ? Math.round((value / before) * 100) : 100
     : 100;
 
   return (

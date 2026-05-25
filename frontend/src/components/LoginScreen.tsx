@@ -31,7 +31,7 @@ export default function LoginScreen({
   onThemeToggle,
   onAuthenticated,
 }: Props) {
-  const [email, setEmail] = useState('test@mail.com');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [remember, setRemember] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
