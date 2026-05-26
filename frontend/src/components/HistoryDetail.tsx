@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { ConvergencePoint, HistoryDetail, OptimizationResult } from '../types';
 import AnalysisSection from './AnalysisSection';
 import ImageWorkspace from './ImageWorkspace';
+import { exportReportPdf, historyDetailToReport } from '../utils/pdfReport';
 
 interface Props {
   id: number;
@@ -62,6 +63,9 @@ export default function HistoryDetailView({ id, apiBase, onClose, onLoadConfig, 
         </span>
         <button className="history-load-btn" onClick={() => onLoadConfig(detail)}>
           Cargar config
+        </button>
+        <button className="history-pdf-btn" onClick={() => exportReportPdf(historyDetailToReport(detail))}>
+          Exportar PDF
         </button>
       </div>
 

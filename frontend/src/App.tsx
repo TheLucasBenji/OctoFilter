@@ -16,6 +16,7 @@ import ImageWorkspace from './components/ImageWorkspace';
 import AnalysisSection from './components/AnalysisSection';
 import LoginScreen from './components/LoginScreen';
 import HistoryView from './components/HistoryView';
+import { exportReportPdf } from './utils/pdfReport';
 
 const API = 'http://localhost:8000';
 const octopusLogo = new URL('./public/octopus.svg', import.meta.url).href;
@@ -504,10 +505,37 @@ export default function App() {
               apiBase={API}
               onLoadConfig={handleLoadConfig}
               onAuthExpired={handleAuthExpired}
+              onBack={() => setView('workspace')}
             />
           ) : (
             <>
               {error && <div className="err-banner">{error}</div>}
+
+              {result && (
+                <div className="workspace-pdf-bar">
+                  <button
+                    className="workspace-pdf-btn"
+                    onClick={() => exportReportPdf({
+                      filterType:   params.filterType,
+                      metricType:   params.metricType,
+                      noiseType:    params.noiseType,
+                      noiseSigma:   params.noiseSigma,
+                      noiseAmount:  params.noiseAmount,
+                      population:   params.population,
+                      iterations:   params.iterations,
+                      seed:         params.seed,
+                      params:       result.params,
+                      metrics:      result.metrics,
+                      convergence:  result.convergence,
+                      originalImage,
+                      noisyImage,
+                      resultImage,
+                    })}
+                  >
+                    Exportar PDF
+                  </button>
+                </div>
+              )}
 
               <ImageWorkspace
                 appState={appState}

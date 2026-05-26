@@ -623,6 +623,29 @@ select:focus-visible {
   box-shadow: var(--shadow-sm);
 }
 
+/* ── History toggle button ─────────────────────────────────────────── */
+.history-toggle-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: none;
+  border-radius: var(--r);
+  background: transparent;
+  color: var(--t2);
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+
+.history-toggle-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+.history-toggle-btn:hover { background: var(--hover); color: var(--t1); }
+.history-toggle-btn.active { background: var(--a-dim); color: var(--a); }
+
 .header-actions {
   margin-left: auto;
   display: flex;
@@ -1709,28 +1732,24 @@ input[type="range"]:disabled { opacity: 0.3; cursor: not-allowed; }
 
 .dl-link a:hover { color: var(--a); }
 
-/* ── History toggle button ─────────────────────────────────────────── */
-.history-toggle-btn {
+.workspace-pdf-bar {
   display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 30px;
-  height: 30px;
-  border: none;
-  border-radius: var(--r);
+  justify-content: flex-end;
+  padding: 8px 16px 12px;
+}
+
+.workspace-pdf-btn {
+  padding: 5px 14px;
+  border-radius: calc(var(--r) - 2px);
+  border: 1px solid var(--a);
   background: transparent;
-  color: var(--t2);
+  font-size: 11px;
+  font-family: var(--ui);
+  color: var(--a);
   cursor: pointer;
   transition: background 0.12s, color 0.12s;
 }
-
-.history-toggle-btn svg {
-  width: 16px;
-  height: 16px;
-}
-
-.history-toggle-btn:hover { background: var(--hover); color: var(--t1); }
-.history-toggle-btn.active { background: var(--a-dim); color: var(--a); }
+.workspace-pdf-btn:hover { background: var(--a-dim); }
 
 /* ── History list view ──────────────────────────────────────────────── */
 .history-view {
@@ -1745,7 +1764,7 @@ input[type="range"]:disabled { opacity: 0.3; cursor: not-allowed; }
 
 .history-view-header {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 10px;
 }
 
@@ -1827,6 +1846,8 @@ input[type="range"]:disabled { opacity: 0.3; cursor: not-allowed; }
 .hist-btn-load:hover { background: var(--green-dim); }
 .hist-btn-del { color: var(--red); border-color: var(--red); }
 .hist-btn-del:hover { background: var(--red-dim); }
+.hist-btn-pdf { color: var(--a); border-color: var(--a); }
+.hist-btn-pdf:hover { background: var(--a-dim); }
 .hist-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
 /* ── History detail view ────────────────────────────────────────────── */
@@ -1891,6 +1912,20 @@ input[type="range"]:disabled { opacity: 0.3; cursor: not-allowed; }
 }
 
 .history-load-btn:hover { background: var(--green-dim); }
+
+.history-pdf-btn {
+  padding: 4px 12px;
+  border-radius: calc(var(--r) - 2px);
+  border: 1px solid var(--a);
+  background: transparent;
+  font-size: 12px;
+  font-family: var(--ui);
+  color: var(--a);
+  cursor: pointer;
+  transition: background 0.12s;
+  white-space: nowrap;
+}
+.history-pdf-btn:hover { background: var(--a-dim); }
 
 @media (max-width: 860px) {
   .auth-shell {
