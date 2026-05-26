@@ -89,7 +89,7 @@ export default function App() {
   }, [theme]);
 
   const toggleTheme = useCallback(() => {
-    setTheme(prev => {
+    setTheme((prev) => {
       const next = prev === 'dark' ? 'light' : 'dark';
       window.localStorage.setItem(THEME_STORAGE_KEY, next);
       return next;
@@ -144,7 +144,9 @@ export default function App() {
     }
 
     loadSession();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => () => evsRef.current?.close(), []);
@@ -155,63 +157,76 @@ export default function App() {
     setError(null);
   }, []);
 
-  const handleConfigModeChange = useCallback((mode: ConfigMode) => {
-    if (appState === 'optimizing') return;
-    setConfigMode(mode);
-    if (mode === 'basic') {
-      setParams(prev => ({
-        ...prev,
-        noiseType: DEFAULT_PARAMS.noiseType,
-        noiseSigma: DEFAULT_PARAMS.noiseSigma,
-        noiseAmount: DEFAULT_PARAMS.noiseAmount,
-        population: DEFAULT_PARAMS.population,
-        iterations: DEFAULT_PARAMS.iterations,
-        seed: DEFAULT_PARAMS.seed,
-      }));
-    }
-  }, [appState]);
-
-  const previewNoise = useCallback(async (file: File, p: AppParams) => {
-    const fd = new FormData();
-    fd.append('image', file);
-    fd.append('noise_type', p.noiseType);
-    fd.append('noise_sigma', p.noiseSigma.toString());
-    fd.append('noise_amount', p.noiseAmount.toString());
-    if (p.seed) fd.append('seed', p.seed);
-    try {
-      const r = await fetch(`${API}/api/preview-noise`, {
-        method: 'POST',
-        credentials: 'include',
-        body: fd,
-      });
-      if (r.status === 401) {
-        handleAuthExpired();
-        return;
+  const handleConfigModeChange = useCallback(
+    (mode: ConfigMode) => {
+      if (appState === 'optimizing') return;
+      setConfigMode(mode);
+      if (mode === 'basic') {
+        setParams((prev) => ({
+          ...prev,
+          noiseType: DEFAULT_PARAMS.noiseType,
+          noiseSigma: DEFAULT_PARAMS.noiseSigma,
+          noiseAmount: DEFAULT_PARAMS.noiseAmount,
+          population: DEFAULT_PARAMS.population,
+          iterations: DEFAULT_PARAMS.iterations,
+          seed: DEFAULT_PARAMS.seed,
+        }));
       }
-      if (!r.ok) {
-        throw new Error(`No se pudo previsualizar el ruido (${r.status}).`);
-      }
-      const d = await r.json();
-      setOriginalImage(d.original_image);
-      setNoisyImage(d.noisy_image);
-    } catch { /* ignore */ }
-  }, [handleAuthExpired]);
+    },
+    [appState],
+  );
 
-  const handleFileUpload = useCallback(async (file: File) => {
-    fileRef.current = file;
-    setAppState('previewing');
-    setResult(null);
-    setResultImage(null);
-    setConvergence([]);
-    setError(null);
-    await previewNoise(file, params);
-  }, [params, previewNoise]);
+  const previewNoise = useCallback(
+    async (file: File, p: AppParams) => {
+      const fd = new FormData();
+      fd.append('image', file);
+      fd.append('noise_type', p.noiseType);
+      fd.append('noise_sigma', p.noiseSigma.toString());
+      fd.append('noise_amount', p.noiseAmount.toString());
+      if (p.seed) fd.append('seed', p.seed);
+      try {
+        const r = await fetch(`${API}/api/preview-noise`, {
+          method: 'POST',
+          credentials: 'include',
+          body: fd,
+        });
+        if (r.status === 401) {
+          handleAuthExpired();
+          return;
+        }
+        if (!r.ok) {
+          throw new Error(`No se pudo previsualizar el ruido (${r.status}).`);
+        }
+        const d = await r.json();
+        setOriginalImage(d.original_image);
+        setNoisyImage(d.noisy_image);
+      } catch {
+        /* ignore */
+      }
+    },
+    [handleAuthExpired],
+  );
+
+  const handleFileUpload = useCallback(
+    async (file: File) => {
+      fileRef.current = file;
+      setAppState('previewing');
+      setResult(null);
+      setResultImage(null);
+      setConvergence([]);
+      setError(null);
+      await previewNoise(file, params);
+    },
+    [params, previewNoise],
+  );
 
   useEffect(() => {
     if (!fileRef.current || appState === 'optimizing') return;
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => previewNoise(fileRef.current!, params), 400);
-    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
   }, [params.noiseType, params.noiseSigma, params.noiseAmount, params.seed, appState, previewNoise]);
 
   const handleRun = useCallback(async () => {
@@ -279,7 +294,7 @@ export default function App() {
       }
       if (ev.type === 'progress') {
         setCurrentIteration(ev.iteration);
-        setConvergence(prev => [...prev, { iteration: ev.iteration, cost: ev.cost }]);
+        setConvergence((prev) => [...prev, { iteration: ev.iteration, cost: ev.cost }]);
       } else if (ev.type === 'complete') {
         setResultImage(ev.result_image);
         setResult(ev as OptimizationResult);
@@ -356,7 +371,9 @@ export default function App() {
           method: 'POST',
           credentials: 'include',
         });
-      } catch { /* ignore logout cancellation failures */ }
+      } catch {
+        /* ignore logout cancellation failures */
+      }
     }
 
     evsRef.current?.close();
@@ -436,7 +453,7 @@ export default function App() {
         </div>
 
         <div className="mode-tabs" role="tablist" aria-label="Modo de configuración">
-          {(['basic', 'advanced'] as ConfigMode[]).map(mode => (
+          {(['basic', 'advanced'] as ConfigMode[]).map((mode) => (
             <button
               key={mode}
               type="button"
@@ -444,35 +461,47 @@ export default function App() {
               role="tab"
               aria-selected={configMode === mode}
               disabled={appState === 'optimizing'}
-              onClick={() => handleConfigModeChange(mode)}
-            >
+              onClick={() => handleConfigModeChange(mode)}>
               {mode === 'basic' ? 'Básico' : 'Avanzado'}
             </button>
           ))}
         </div>
 
         <div className="header-actions">
-          <span className="user-pill" title={authUser.email}>{authUser.email}</span>
           <button
             type="button"
-            className={`history-toggle-btn${view === 'history' ? ' active' : ''}`}
-            onClick={() => setView(v => v === 'workspace' ? 'history' : 'workspace')}
-            aria-label="Historial"
-            title="Historial de optimizaciones"
-          >
-            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            className={`history-inline-btn${view === 'history' ? ' active' : ''}`}
+            onClick={() => setView((v) => (v === 'workspace' ? 'history' : 'workspace'))}
+            disabled={appState === 'optimizing'}
+            aria-pressed={view === 'history'}
+            title="Historial de optimizaciones">
+            {view === 'history' && <span className="history-close">✕</span>}
+            <svg
+              viewBox="0 0 24 24"
+              className="history-icon"
+              aria-hidden="true"
+              focusable="false"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round">
               <path d="M12 8v4l3 3" />
               <path d="M3.05 11a9 9 0 1 1 .5 4" />
               <polyline points="3 7 3 11 7 11" />
             </svg>
+            <span className="history-label">Historial</span>
           </button>
+
+          <span className="user-pill" title={authUser.email}>
+            {authUser.email}
+          </span>
           <button
             type="button"
             className="logout-btn"
             onClick={handleLogout}
             aria-label="Cerrar sesión"
-            title="Cerrar sesión"
-          >
+            title="Cerrar sesión">
             <FiLogOut aria-hidden="true" />
           </button>
           <button
@@ -480,8 +509,7 @@ export default function App() {
             className="theme-toggle"
             onClick={toggleTheme}
             aria-label="Cambiar tema"
-            title="Cambiar tema"
-          >
+            title="Cambiar tema">
             <ThemeIcon theme={theme} />
           </button>
         </div>
@@ -500,15 +528,9 @@ export default function App() {
         />
 
         <main className="main">
-          {view === 'history' ? (
-            <HistoryView
-              apiBase={API}
-              onLoadConfig={handleLoadConfig}
-              onAuthExpired={handleAuthExpired}
-              onBack={() => setView('workspace')}
-            />
-          ) : (
-            <>
+          {view === 'history' ?
+            <HistoryView apiBase={API} onLoadConfig={handleLoadConfig} onAuthExpired={handleAuthExpired} />
+          : <>
               {error && <div className="err-banner">{error}</div>}
 
               {result && (
@@ -554,7 +576,7 @@ export default function App() {
                 />
               )}
             </>
-          )}
+          }
         </main>
       </div>
     </div>
