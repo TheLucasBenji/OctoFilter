@@ -529,7 +529,7 @@ export default function App() {
 
         <main className="main">
           {view === 'history' ?
-            <HistoryView apiBase={API} onLoadConfig={handleLoadConfig} onAuthExpired={handleAuthExpired} />
+            <HistoryView apiBase={API} onLoadConfig={handleLoadConfig} onAuthExpired={handleAuthExpired} onBack={() => setView('workspace')} />
           : <>
               {error && <div className="err-banner">{error}</div>}
 
