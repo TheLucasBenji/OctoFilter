@@ -1906,17 +1906,20 @@ input[type='range']:disabled {
   color: var(--a);
 }
 
-/* ── History toggle button ─────────────────────────────────────────── */
-.history-toggle-btn {
+.workspace-pdf-bar {
   display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 30px;
-  height: 30px;
-  border: none;
-  border-radius: var(--r);
+  justify-content: flex-end;
+  padding: 8px 16px 12px;
+}
+
+.workspace-pdf-btn {
+  padding: 5px 14px;
+  border-radius: calc(var(--r) - 2px);
+  border: 1px solid var(--a);
   background: transparent;
-  color: var(--t2);
+  font-size: 11px;
+  font-family: var(--ui);
+  color: var(--a);
   cursor: pointer;
   transition:
     background 0.12s,
@@ -1928,14 +1931,8 @@ input[type='range']:disabled {
   height: 16px;
 }
 
-.history-toggle-btn:hover {
-  background: var(--hover);
-  color: var(--t1);
-}
-.history-toggle-btn.active {
-  background: var(--a-dim);
-  color: var(--a);
-}
+.history-toggle-btn:hover { background: var(--hover); color: var(--t1); }
+.history-toggle-btn.active { background: var(--a-dim); color: var(--a); }
 
 /* ── History list view ──────────────────────────────────────────────── */
 .history-view {
@@ -1950,7 +1947,7 @@ input[type='range']:disabled {
 
 .history-view-header {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 10px;
 }
 
@@ -2040,32 +2037,13 @@ input[type='range']:disabled {
   color: var(--t2);
 }
 
-.hist-btn:hover {
-  background: var(--raised);
-  color: var(--t1);
-}
-.hist-btn-view:hover {
-  border-color: var(--a);
-  color: var(--a);
-}
-.hist-btn-load {
-  color: var(--green);
-  border-color: var(--green);
-}
-.hist-btn-load:hover {
-  background: var(--green-dim);
-}
-.hist-btn-del {
-  color: var(--red);
-  border-color: var(--red);
-}
-.hist-btn-del:hover {
-  background: var(--red-dim);
-}
-.hist-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
+.hist-btn:hover { background: var(--raised); color: var(--t1); }
+.hist-btn-view:hover { border-color: var(--a); color: var(--a); }
+.hist-btn-load { color: var(--green); border-color: var(--green); }
+.hist-btn-load:hover { background: var(--green-dim); }
+.hist-btn-del { color: var(--red); border-color: var(--red); }
+.hist-btn-del:hover { background: var(--red-dim); }
+.hist-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
 /* ── History detail view ────────────────────────────────────────────── */
 .history-detail {
@@ -2136,9 +2114,7 @@ input[type='range']:disabled {
   white-space: nowrap;
 }
 
-.history-load-btn:hover {
-  background: var(--green-dim);
-}
+.history-load-btn:hover { background: var(--green-dim); }
 
 @media (max-width: 860px) {
   .auth-shell {

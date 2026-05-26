@@ -2,24 +2,21 @@ import { useCallback, useEffect, useState } from 'react';
 import { HistoryDetail, HistorySummary } from '../types';
 import HistoryDetailView from './HistoryDetail';
 import Modal from './Modal';
+import { FILTER_LABELS, exportReportPdf, historyDetailToReport } from '../utils/pdfReport';
 
 interface Props {
   apiBase: string;
   onLoadConfig: (detail: HistoryDetail) => void;
   onAuthExpired: () => void;
+  onBack: () => void;
 }
 
-const FILTER_LABELS: Record<string, string> = {
-  bilateral: 'Bilateral',
-  anisotropic: 'Anisotropic Diffusion',
-  nlmeans: 'Non-Local Means',
-};
-
-export default function HistoryView({ apiBase, onLoadConfig, onAuthExpired }: Props) {
+export default function HistoryView({ apiBase, onLoadConfig, onAuthExpired, onBack }: Props) {
   const [items, setItems] = useState<HistorySummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [pdfId, setPdfId] = useState<number | null>(null);
 
   const loadHistory = useCallback(async () => {
     setLoading(true);
@@ -70,9 +67,24 @@ export default function HistoryView({ apiBase, onLoadConfig, onAuthExpired }: Pr
     }
   };
 
+  const handleExportPdf = async (id: number) => {
+    setPdfId(id);
+    try {
+      const r = await fetch(`${apiBase}/api/history/${id}`, { credentials: 'include' });
+      if (r.status === 401) { onAuthExpired(); return; }
+      if (r.ok) {
+        const detail = (await r.json()) as HistoryDetail;
+        exportReportPdf(historyDetailToReport(detail));
+      }
+    } finally {
+      setPdfId(null);
+    }
+  };
+
   return (
     <div className="history-view">
       <div className="history-view-header">
+        <button className="history-back-btn" onClick={onBack} title="Volver al inicio">←</button>
         <span className="history-view-title">Historial de optimizaciones</span>
         <span className="history-view-count">
           {items.length} entrada{items.length !== 1 ? 's' : ''}
@@ -108,6 +120,12 @@ export default function HistoryView({ apiBase, onLoadConfig, onAuthExpired }: Pr
                   </button>
                   <button className="hist-btn hist-btn-load" onClick={() => handleLoadConfigById(item.id)}>
                     Cargar config
+                  </button>
+                  <button
+                    className="hist-btn hist-btn-pdf"
+                    onClick={() => handleExportPdf(item.id)}
+                    disabled={pdfId === item.id}>
+                    {pdfId === item.id ? '...' : 'Exportar PDF'}
                   </button>
                   <button
                     className="hist-btn hist-btn-del"
