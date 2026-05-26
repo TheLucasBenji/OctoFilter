@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { FaRegCircleStop } from 'react-icons/fa6';
 import {
+  AlgorithmType,
   AppParams,
   AppState,
   ConfigMode,
@@ -9,6 +10,7 @@ import {
   NoiseType,
 } from '../types';
 import {
+  ALGORITHM_HELP,
   FILTER_HELP,
   METRIC_HELP,
   NOISE_HELP,
@@ -58,6 +60,11 @@ const METRICS: { value: MetricType; label: string; hint: string }[] = [
   { value: 'mse', label: 'MSE', hint: 'minimizar error' },
   { value: 'snr', label: 'SNR', hint: 'maximizar señal' },
   { value: 'piqe', label: 'PIQE', hint: 'perceptual sin referencia' },
+];
+
+const ALGORITHMS: { value: AlgorithmType; label: string; short: string }[] = [
+  { value: 'ooa', label: 'Octopus', short: 'OOA' },
+  { value: 'sfoa', label: 'Starfish', short: 'SFOA' },
 ];
 
 function RunBlock({
@@ -162,9 +169,41 @@ export default function Sidebar({
             </div>
           </div>
 
+          {/* ── Algoritmo (basic) ─────────────────────────────────── */}
           <div className="sb-group">
             <div className="step-heading">
               <span className="step-num">1</span>
+              <InfoHint
+                label="Algoritmo"
+                description={TERM_HELP.algorithm}
+                className="step-heading-label"
+              />
+            </div>
+            <div className="algo-btns">
+              {ALGORITHMS.map(a => (
+                <button
+                  key={a.value}
+                  className={`algo-btn${params.algorithm === a.value ? ' active' : ''}`}
+                  onClick={() => set('algorithm', a.value)}
+                  disabled={locked}
+                  title={ALGORITHM_HELP[a.value]}
+                  aria-label={`${a.label}. ${ALGORITHM_HELP[a.value]}`}
+                >
+                  <span
+                    className="algo-dot"
+                    style={params.algorithm === a.value ? { background: `var(--${a.value})` } : undefined}
+                  />
+                  <span className="filter-title">{a.label}</span>
+                  <span className="algo-short">{a.short}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* ── Filtro (basic) ────────────────────────────────────── */}
+          <div className="sb-group">
+            <div className="step-heading">
+              <span className="step-num">2</span>
               <InfoHint
                 label="Filtro"
                 description={TERM_HELP.filter}
@@ -192,9 +231,10 @@ export default function Sidebar({
             </div>
           </div>
 
+          {/* ── Métrica (basic) ───────────────────────────────────── */}
           <div className="sb-group">
             <div className="step-heading">
-              <span className="step-num">2</span>
+              <span className="step-num">3</span>
               <InfoHint
                 label="Métrica"
                 description={TERM_HELP.metric}
@@ -218,9 +258,10 @@ export default function Sidebar({
             </div>
           </div>
 
+          {/* ── Ajuste automático (basic) ─────────────────────────── */}
           <div className="sb-group">
             <div className="step-heading">
-              <span className="step-num">3</span>
+              <span className="step-num">4</span>
               <span>Ajuste automático</span>
             </div>
             <div className="preset-grid">
@@ -275,10 +316,109 @@ export default function Sidebar({
         </>
       ) : (
         <>
+          <div className="sb-group sb-hero">
+            <div className="sb-label">Modo avanzado</div>
+            <div className="basic-status">
+              <span className={`basic-status-dot${imageReady ? ' ready' : ''}`} />
+              <span>{imageReady ? 'Imagen lista' : 'Sin imagen'}</span>
+            </div>
+          </div>
+
+          {/* ── 1. Algoritmo (advanced) ───────────────────────────── */}
           <div className="sb-group">
-            <div className="sb-label sb-label-with-info">
-              <span>Filtro</span>
-              <InfoHint description={TERM_HELP.filter} align="right" />
+            <div className="step-heading">
+              <span className="step-num">1</span>
+              <InfoHint
+                label="Algoritmo"
+                description={TERM_HELP.algorithm}
+                className="step-heading-label"
+              />
+            </div>
+
+            <div className="algo-btns">
+              {ALGORITHMS.map(a => (
+                <button
+                  key={a.value}
+                  className={`algo-btn${params.algorithm === a.value ? ' active' : ''}`}
+                  onClick={() => set('algorithm', a.value)}
+                  disabled={locked}
+                  title={ALGORITHM_HELP[a.value]}
+                  aria-label={`${a.label}. ${ALGORITHM_HELP[a.value]}`}
+                >
+                  <span
+                    className="algo-dot"
+                    style={params.algorithm === a.value ? { background: `var(--${a.value})` } : undefined}
+                  />
+                  <span className="filter-title">{a.label}</span>
+                  <span className="algo-short">{a.short}</span>
+                </button>
+              ))}
+            </div>
+
+            <div className="field">
+              <label className="field-label">
+                <InfoHint
+                  label="Población"
+                  description={TERM_HELP.population}
+                  className="field-label-name"
+                />
+                <span className="field-label-val">{params.population}</span>
+              </label>
+              <input
+                type="range"
+                min={9} max={200} step={1}
+                value={params.population}
+                onChange={e => set('population', Number(e.target.value))}
+                disabled={locked}
+              />
+            </div>
+
+            <div className="field">
+              <label className="field-label">
+                <InfoHint
+                  label="Iteraciones"
+                  description={TERM_HELP.iterations}
+                  className="field-label-name"
+                />
+                <span className="field-label-val">{params.iterations}</span>
+              </label>
+              <input
+                type="range"
+                min={5} max={500} step={5}
+                value={params.iterations}
+                onChange={e => set('iterations', Number(e.target.value))}
+                disabled={locked}
+              />
+            </div>
+
+            <div className="field">
+              <label className="field-label">
+                <InfoHint
+                  label="Semilla"
+                  description={TERM_HELP.seed}
+                  className="field-label-name"
+                />
+                <span className="field-label-optional">opcional</span>
+              </label>
+              <input
+                type="number"
+                placeholder="-"
+                value={params.seed}
+                onChange={e => set('seed', e.target.value)}
+                disabled={locked}
+              />
+            </div>
+          </div>
+
+          {/* ── 2. Filtro (advanced) ──────────────────────────────── */}
+          <div className="sb-group">
+            <div className="step-heading">
+              <span className="step-num">2</span>
+              <InfoHint
+                label="Filtro"
+                description={TERM_HELP.filter}
+                className="step-heading-label"
+              />
             </div>
             <div className="filter-btns">
               {FILTERS.map(f => (
@@ -316,10 +456,36 @@ export default function Sidebar({
             )}
           </div>
 
+          {/* ── 3. Métrica (advanced) ────────────────────────────── */}
           <div className="sb-group">
-            <div className="sb-label sb-label-with-info">
-              <span>Ruido</span>
-              <InfoHint description={TERM_HELP.noise} align="right" />
+            <div className="step-heading">
+              <span className="step-num">3</span>
+              <InfoHint
+                label="Métrica"
+                description={TERM_HELP.metric}
+                className="step-heading-label"
+              />
+            </div>
+            <select
+              value={params.metricType}
+              onChange={e => set('metricType', e.target.value as MetricType)}
+              disabled={locked}
+            >
+              {METRICS.map(m => (
+                <option key={m.value} value={m.value}>{m.label} — {m.hint}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* ── 4. Ruido (advanced) ───────────────────────────────── */}
+          <div className="sb-group">
+            <div className="step-heading">
+              <span className="step-num">4</span>
+              <InfoHint
+                label="Ruido"
+                description={TERM_HELP.noise}
+                className="step-heading-label"
+              />
             </div>
 
             <div className="field">
@@ -376,86 +542,6 @@ export default function Sidebar({
                 />
               </div>
             )}
-          </div>
-
-          <div className="sb-group">
-            <div className="sb-label sb-label-with-info">
-              <span>Algoritmo — OOA</span>
-              <InfoHint description={TERM_HELP.ooa} align="right" />
-            </div>
-
-            <div className="field">
-              <label className="field-label">
-                <InfoHint
-                  label="Población"
-                  description={TERM_HELP.population}
-                  className="field-label-name"
-                />
-                <span className="field-label-val">{params.population}</span>
-              </label>
-              <input
-                type="range"
-                min={9} max={200} step={1}
-                value={params.population}
-                onChange={e => set('population', Number(e.target.value))}
-                disabled={locked}
-              />
-            </div>
-
-            <div className="field">
-              <label className="field-label">
-                <InfoHint
-                  label="Iteraciones"
-                  description={TERM_HELP.iterations}
-                  className="field-label-name"
-                />
-                <span className="field-label-val">{params.iterations}</span>
-              </label>
-              <input
-                type="range"
-                min={5} max={500} step={5}
-                value={params.iterations}
-                onChange={e => set('iterations', Number(e.target.value))}
-                disabled={locked}
-              />
-            </div>
-
-            <div className="field">
-              <label className="field-label">
-                <InfoHint
-                  label="Métrica objetivo"
-                  description={TERM_HELP.metric}
-                  className="field-label-name"
-                />
-              </label>
-              <select
-                value={params.metricType}
-                onChange={e => set('metricType', e.target.value as MetricType)}
-                disabled={locked}
-              >
-                {METRICS.map(m => (
-                  <option key={m.value} value={m.value}>{m.label} — {m.hint}</option>
-                ))}
-              </select>
-            </div>
-
-            <div className="field">
-              <label className="field-label">
-                <InfoHint
-                  label="Semilla"
-                  description={TERM_HELP.seed}
-                  className="field-label-name"
-                />
-                <span className="field-label-optional">opcional</span>
-              </label>
-              <input
-                type="number"
-                placeholder="-"
-                value={params.seed}
-                onChange={e => set('seed', e.target.value)}
-                disabled={locked}
-              />
-            </div>
           </div>
 
           <RunBlock

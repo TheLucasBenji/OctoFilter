@@ -1,6 +1,8 @@
-import type { FilterType, MetricType, NoiseType } from './types';
+import type { AlgorithmType, FilterType, MetricType, NoiseType } from './types';
 
 export const TERM_HELP = {
+  algorithm:
+    'Metaheurística de búsqueda que explora el espacio de parámetros para encontrar la mejor configuración del filtro.',
   filter:
     'Filtro de reducción de ruido que se optimiza para esta imagen.',
   metric:
@@ -9,10 +11,12 @@ export const TERM_HELP = {
     'Alteración artificial aplicada a la imagen para probar la capacidad de recuperación del filtro.',
   ooa:
     'Octopus Optimization Algorithm: metaheurística que prueba soluciones candidatas y conserva las mejores.',
+  sfoa:
+    'Starfish Optimization Algorithm: metaheurística inspirada en la estrella de mar. Alterna exploración con patrones de búsqueda multi-dimensional y explotación mediante cinco brazos virtuales, más una fase de regeneración.',
   convergence:
     'Evolución del mejor costo encontrado por el algoritmo durante la optimización.',
   cost:
-    'Valor que OOA intenta mejorar. Según la métrica, puede representar error, calidad perceptual o señal/ruido.',
+    'Valor que el algoritmo intenta mejorar. Según la métrica, puede representar error, calidad perceptual o señal/ruido.',
   bestParams:
     'Combinación de parámetros del filtro que obtuvo el mejor resultado durante la búsqueda.',
   sigma:
@@ -43,6 +47,13 @@ export const METRIC_HELP: Record<MetricType, string> = {
     'Relación señal/ruido en decibeles. Mayor indica menos ruido relativo.',
   piqe:
     'Estimación perceptual de calidad sin imagen de referencia. Menor es mejor.',
+};
+
+export const ALGORITHM_HELP: Record<AlgorithmType, string> = {
+  ooa:
+    'Octopus Optimization Algorithm: divide la población en cabezas, tentáculos y exploradores que combinan explotación con vuelos de Lévy.',
+  sfoa:
+    'Starfish Optimization Algorithm: alterna exploración multi-dimensional y explotación mediante cinco brazos virtuales, con regeneración del último individuo.',
 };
 
 export const NOISE_HELP: Record<NoiseType, string> = {

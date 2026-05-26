@@ -128,13 +128,20 @@ def init_auth_db() -> None:
               original_path TEXT,
               noisy_path    TEXT,
               result_path   TEXT,
-              duration_ms   INTEGER
+              duration_ms   INTEGER,
+              algorithm     TEXT
             );
 
             CREATE INDEX IF NOT EXISTS idx_optimizations_user_created
               ON optimizations(user_id, created_at DESC);
             """
         )
+
+        # Migration: add algorithm column to existing databases
+        try:
+            conn.execute("ALTER TABLE optimizations ADD COLUMN algorithm TEXT")
+        except Exception:
+            pass  # column already exists
 
         conn.execute(
             "DELETE FROM sessions WHERE expires_at <= ? OR revoked_at IS NOT NULL",
