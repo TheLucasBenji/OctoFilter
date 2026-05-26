@@ -1,4 +1,6 @@
 import { OptimizationResult, MetricType } from '../types';
+import { METRIC_HELP, TERM_HELP, getParamHelp } from '../helpTexts';
+import InfoHint from './InfoHint';
 
 interface Props { result: OptimizationResult; metricType: MetricType; }
 
@@ -9,9 +11,9 @@ function delta(before: number, after: number, lowerBetter: boolean) {
   return { label: `${pct > 0 ? '+' : ''}${pct.toFixed(1)}%`, good };
 }
 
-function MetricTile({ label, value, unit, before, lowerBetter }: {
+function MetricTile({ label, value, unit, before, lowerBetter, help }: {
   label: string; value: number | null; unit?: string;
-  before: number | null; lowerBetter: boolean;
+  before: number | null; lowerBetter: boolean; help: string;
 }) {
   if (value === null || before === null) return null;
 
@@ -28,7 +30,9 @@ function MetricTile({ label, value, unit, before, lowerBetter }: {
 
   return (
     <div className="metric-tile">
-      <div className="mt-label">{label}</div>
+      <div className="mt-label">
+        <InfoHint label={label} description={help} icon={false} className="mt-help-label" />
+      </div>
       <div className="mt-value">
         {value.toFixed(2)}
         {unit && <span className="unit">{unit}</span>}
@@ -56,6 +60,7 @@ export default function MetricsPanel({ result, metricType }: Props) {
           value={metrics.mse}
           before={metrics.noisy_mse}
           lowerBetter={true}
+          help={METRIC_HELP.mse}
         />
         <MetricTile
           label="SNR"
@@ -63,6 +68,7 @@ export default function MetricsPanel({ result, metricType }: Props) {
           value={metrics.snr}
           before={metrics.noisy_snr}
           lowerBetter={false}
+          help={METRIC_HELP.snr}
         />
         {metrics.piqe !== null && (
           <MetricTile
@@ -70,18 +76,34 @@ export default function MetricsPanel({ result, metricType }: Props) {
             value={metrics.piqe}
             before={metrics.noisy_piqe}
             lowerBetter={true}
+            help={METRIC_HELP.piqe}
           />
         )}
 
         {/* Best params */}
         <div className="params-tile">
-          <div className="mt-label">Mejores parámetros · {metricType.toUpperCase()}</div>
-          {Object.entries(params).map(([k, v]) => (
-            <div key={k} className="pt-row">
-              <span className="pt-key">{k}</span>
-              <span className="pt-val">{Number.isInteger(v) ? v : (v as number).toFixed(3)}</span>
-            </div>
-          ))}
+          <div className="mt-label">
+            <InfoHint
+              label={<>Mejores parámetros · {metricType.toUpperCase()}</>}
+              description={TERM_HELP.bestParams}
+              icon={false}
+              className="mt-help-label"
+              ariaLabel={`Mejores parámetros ${metricType.toUpperCase()}: ${TERM_HELP.bestParams}`}
+            />
+          </div>
+          {Object.entries(params).map(([k, v]) => {
+            const help = getParamHelp(k);
+            return (
+              <div key={k} className="pt-row">
+                {help ? (
+                  <InfoHint label={k} description={help} icon={false} className="pt-key" />
+                ) : (
+                  <span className="pt-key">{k}</span>
+                )}
+                <span className="pt-val">{Number.isInteger(v) ? v : (v as number).toFixed(3)}</span>
+              </div>
+            );
+          })}
         </div>
       </div>
     </>

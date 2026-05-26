@@ -1,5 +1,7 @@
 import { ConvergencePoint, MetricType, OptimizationResult } from '../types';
+import { METRIC_HELP, TERM_HELP } from '../helpTexts';
 import ConvergenceChart from './ConvergenceChart';
+import InfoHint from './InfoHint';
 import MetricsPanel from './MetricsPanel';
 
 interface Props {
@@ -14,7 +16,15 @@ export default function AnalysisSection({ convergence, result, metricType, total
     <div className="analysis">
       <div className="chart-section">
         <div className="section-header">
-          <span className="section-title">Convergencia — {metricType.toUpperCase()}</span>
+          <span className="section-title">
+            <InfoHint
+              label={<>Convergencia — {metricType.toUpperCase()}</>}
+              description={`${TERM_HELP.convergence} ${METRIC_HELP[metricType]}`}
+              icon={false}
+              className="section-title-help"
+              ariaLabel={`Convergencia ${metricType.toUpperCase()}: ${TERM_HELP.convergence} ${METRIC_HELP[metricType]}`}
+            />
+          </span>
           <span className="section-meta">{convergence.length} / {totalIterations} iter</span>
         </div>
         {convergence.length > 0 ? (

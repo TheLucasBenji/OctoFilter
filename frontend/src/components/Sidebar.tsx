@@ -8,6 +8,14 @@ import {
   MetricType,
   NoiseType,
 } from '../types';
+import {
+  FILTER_HELP,
+  METRIC_HELP,
+  NOISE_HELP,
+  TERM_HELP,
+  getParamHelp,
+} from '../helpTexts';
+import InfoHint from './InfoHint';
 
 const API = 'http://localhost:8000';
 
@@ -133,7 +141,10 @@ export default function Sidebar({
   const set = <K extends keyof AppParams>(k: K, v: AppParams[K]) => onChange({ ...params, [k]: v });
 
   useEffect(() => {
-    fetch(`${API}/api/filters`).then(r => r.json()).then(setFilterInfo).catch(() => {});
+    fetch(`${API}/api/filters`, { credentials: 'include' })
+      .then(r => (r.ok ? r.json() : Promise.reject()))
+      .then(setFilterInfo)
+      .catch(() => {});
   }, []);
 
   const curFilter = filterInfo[params.filterType];
@@ -154,7 +165,11 @@ export default function Sidebar({
           <div className="sb-group">
             <div className="step-heading">
               <span className="step-num">1</span>
-              <span>Filtro</span>
+              <InfoHint
+                label="Filtro"
+                description={TERM_HELP.filter}
+                className="step-heading-label"
+              />
             </div>
             <div className="filter-btns">
               {FILTERS.map(f => (
@@ -163,6 +178,8 @@ export default function Sidebar({
                   className={`filter-btn${params.filterType === f.value ? ' active' : ''}`}
                   onClick={() => set('filterType', f.value)}
                   disabled={locked}
+                  title={FILTER_HELP[f.value]}
+                  aria-label={`${f.label}. ${FILTER_HELP[f.value]}`}
                 >
                   <span className="filter-dot" />
                   <span>
@@ -178,7 +195,11 @@ export default function Sidebar({
           <div className="sb-group">
             <div className="step-heading">
               <span className="step-num">2</span>
-              <span>Métrica</span>
+              <InfoHint
+                label="Métrica"
+                description={TERM_HELP.metric}
+                className="step-heading-label"
+              />
             </div>
             <div className="metric-btns">
               {METRICS.map(m => (
@@ -187,6 +208,8 @@ export default function Sidebar({
                   className={`metric-btn${params.metricType === m.value ? ' active' : ''}`}
                   onClick={() => set('metricType', m.value)}
                   disabled={locked}
+                  title={METRIC_HELP[m.value]}
+                  aria-label={`${m.label}. ${METRIC_HELP[m.value]}`}
                 >
                   <span>{m.label}</span>
                   <small>{m.hint}</small>
@@ -202,19 +225,39 @@ export default function Sidebar({
             </div>
             <div className="preset-grid">
               <div className="preset-item">
-                <span>Ruido</span>
+                <InfoHint
+                  label="Ruido"
+                  description={`${TERM_HELP.noise} En modo básico se usa ruido gaussiano: ${NOISE_HELP.gaussian}`}
+                  icon={false}
+                  className="preset-label"
+                />
                 <strong>Gaussiano</strong>
               </div>
               <div className="preset-item">
-                <span>Sigma</span>
+                <InfoHint
+                  label="Sigma"
+                  description={TERM_HELP.sigma}
+                  icon={false}
+                  className="preset-label"
+                />
                 <strong>25</strong>
               </div>
               <div className="preset-item">
-                <span>Población</span>
+                <InfoHint
+                  label="Población"
+                  description={TERM_HELP.population}
+                  icon={false}
+                  className="preset-label"
+                />
                 <strong>30</strong>
               </div>
               <div className="preset-item">
-                <span>Iteraciones</span>
+                <InfoHint
+                  label="Iteraciones"
+                  description={TERM_HELP.iterations}
+                  icon={false}
+                  className="preset-label"
+                />
                 <strong>50</strong>
               </div>
             </div>
@@ -233,7 +276,10 @@ export default function Sidebar({
       ) : (
         <>
           <div className="sb-group">
-            <div className="sb-label">Filtro</div>
+            <div className="sb-label sb-label-with-info">
+              <span>Filtro</span>
+              <InfoHint description={TERM_HELP.filter} align="right" />
+            </div>
             <div className="filter-btns">
               {FILTERS.map(f => (
                 <button
@@ -241,6 +287,8 @@ export default function Sidebar({
                   className={`filter-btn${params.filterType === f.value ? ' active' : ''}`}
                   onClick={() => set('filterType', f.value)}
                   disabled={locked}
+                  title={FILTER_HELP[f.value]}
+                  aria-label={`${f.label}. ${FILTER_HELP[f.value]}`}
                 >
                   <span className="filter-dot" />
                   <span className="filter-title">{f.label}</span>
@@ -250,15 +298,29 @@ export default function Sidebar({
             </div>
             {curFilter && (
               <div className="filter-params">
-                {curFilter.params.map(p => (
-                  <span key={p.name} className="fp-chip">{p.name}</span>
-                ))}
+                {curFilter.params.map(p => {
+                  const help = getParamHelp(p.name);
+                  return help ? (
+                    <InfoHint
+                      key={p.name}
+                      label={p.name}
+                      description={help}
+                      icon={false}
+                      className="fp-chip"
+                    />
+                  ) : (
+                    <span key={p.name} className="fp-chip">{p.name}</span>
+                  );
+                })}
               </div>
             )}
           </div>
 
           <div className="sb-group">
-            <div className="sb-label">Ruido</div>
+            <div className="sb-label sb-label-with-info">
+              <span>Ruido</span>
+              <InfoHint description={TERM_HELP.noise} align="right" />
+            </div>
 
             <div className="field">
               <div className="noise-seg">
@@ -268,6 +330,8 @@ export default function Sidebar({
                     className={`noise-seg-btn${params.noiseType === t ? ' active' : ''}`}
                     onClick={() => set('noiseType', t)}
                     disabled={locked}
+                    title={NOISE_HELP[t]}
+                    aria-label={`${t === 'gaussian' ? 'Gaussiano' : 'Sal y pimienta'}. ${NOISE_HELP[t]}`}
                   >
                     {t === 'gaussian' ? 'Gaussiano' : 'Sal y pimienta'}
                   </button>
@@ -278,7 +342,11 @@ export default function Sidebar({
             {params.noiseType === 'gaussian' ? (
               <div className="field">
                 <label className="field-label">
-                  Sigma
+                  <InfoHint
+                    label="Sigma"
+                    description={TERM_HELP.sigma}
+                    className="field-label-name"
+                  />
                   <span className="field-label-val">{params.noiseSigma}</span>
                 </label>
                 <input
@@ -292,7 +360,11 @@ export default function Sidebar({
             ) : (
               <div className="field">
                 <label className="field-label">
-                  Cantidad
+                  <InfoHint
+                    label="Cantidad"
+                    description={TERM_HELP.amount}
+                    className="field-label-name"
+                  />
                   <span className="field-label-val">{params.noiseAmount.toFixed(2)}</span>
                 </label>
                 <input
@@ -307,11 +379,18 @@ export default function Sidebar({
           </div>
 
           <div className="sb-group">
-            <div className="sb-label">Algoritmo — OOA</div>
+            <div className="sb-label sb-label-with-info">
+              <span>Algoritmo — OOA</span>
+              <InfoHint description={TERM_HELP.ooa} align="right" />
+            </div>
 
             <div className="field">
               <label className="field-label">
-                Población
+                <InfoHint
+                  label="Población"
+                  description={TERM_HELP.population}
+                  className="field-label-name"
+                />
                 <span className="field-label-val">{params.population}</span>
               </label>
               <input
@@ -325,7 +404,11 @@ export default function Sidebar({
 
             <div className="field">
               <label className="field-label">
-                Iteraciones
+                <InfoHint
+                  label="Iteraciones"
+                  description={TERM_HELP.iterations}
+                  className="field-label-name"
+                />
                 <span className="field-label-val">{params.iterations}</span>
               </label>
               <input
@@ -338,7 +421,13 @@ export default function Sidebar({
             </div>
 
             <div className="field">
-              <label className="field-label">Métrica objetivo</label>
+              <label className="field-label">
+                <InfoHint
+                  label="Métrica objetivo"
+                  description={TERM_HELP.metric}
+                  className="field-label-name"
+                />
+              </label>
               <select
                 value={params.metricType}
                 onChange={e => set('metricType', e.target.value as MetricType)}
@@ -352,7 +441,11 @@ export default function Sidebar({
 
             <div className="field">
               <label className="field-label">
-                Semilla
+                <InfoHint
+                  label="Semilla"
+                  description={TERM_HELP.seed}
+                  className="field-label-name"
+                />
                 <span className="field-label-optional">opcional</span>
               </label>
               <input

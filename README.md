@@ -62,7 +62,7 @@ uvicorn backend.main:app --port 8000 --reload
 
 # Frontend (en otra terminal)
 cd frontend
-npm install
+pnpm install 
 npm run dev
 ```
 

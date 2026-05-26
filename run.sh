@@ -10,7 +10,7 @@ trap 'echo ""; echo "Stopping..."; kill $(jobs -p) 2>/dev/null; exit 0' INT TERM
 # Install frontend deps if needed
 if [ ! -d "frontend/node_modules" ]; then
   echo "▸ Installing frontend dependencies..."
-  (cd frontend && npm install)
+  (cd frontend && pnpm install)
 fi
 
 # Check uvicorn is available
