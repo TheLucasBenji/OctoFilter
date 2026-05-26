@@ -83,3 +83,8 @@ playwright-report/
 dist/
 build/
 out/
+OctoFilter _standalone_.html
+CLAUDE.md
+AGENTS.md
+.codex/
+.claude/
