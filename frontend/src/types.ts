@@ -1,6 +1,7 @@
 export type FilterType = 'bilateral' | 'anisotropic' | 'nlmeans';
 export type MetricType = 'mse' | 'snr' | 'piqe';
 export type NoiseType = 'gaussian' | 'sp';
+export type AlgorithmType = 'ooa' | 'sfoa';
 export type ConfigMode = 'basic' | 'advanced';
 export type ThemePreference = 'light' | 'dark';
 
@@ -18,6 +19,7 @@ export interface AppParams {
   population: number;
   iterations: number;
   seed: string;
+  algorithm: AlgorithmType;
 }
 
 export interface ResultMetrics {
@@ -53,6 +55,7 @@ export interface HistorySummary {
   metric_type: MetricType;
   best_cost: number;
   metric_used: string;
+  algorithm?: AlgorithmType;
 }
 
 export interface HistoryDetail extends HistorySummary {
@@ -62,6 +65,7 @@ export interface HistoryDetail extends HistorySummary {
   population: number;
   iterations: number;
   seed: number | null;
+  algorithm?: AlgorithmType;
   params: Record<string, number>;
   metrics: ResultMetrics;
   convergence: number[];

@@ -31,8 +31,8 @@ def save_optimization(
                 params_json, metrics_json, convergence_json,
                 best_cost, metric_used,
                 original_path, noisy_path, result_path,
-                duration_ms
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, ?)
+                duration_ms, algorithm
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, ?, ?)
             """,
             (
                 user_id, now_iso(),
@@ -42,7 +42,7 @@ def save_optimization(
                 params_req.get("seed"),
                 json.dumps(best_params), json.dumps(metrics), json.dumps(convergence),
                 float(metrics["best_cost"]), metrics["metric_used"],
-                duration_ms,
+                duration_ms, params_req.get("algorithm"),
             ),
         )
         opt_id = cur.lastrowid
@@ -73,7 +73,7 @@ def list_optimizations(user_id: int, limit: int = 50, offset: int = 0) -> list:
     with connect() as conn:
         rows = conn.execute(
             """
-            SELECT id, created_at, filter_type, metric_type, best_cost, metric_used
+            SELECT id, created_at, filter_type, metric_type, best_cost, metric_used, algorithm
             FROM optimizations
             WHERE user_id = ?
             ORDER BY created_at DESC

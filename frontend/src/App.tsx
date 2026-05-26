@@ -30,6 +30,7 @@ const DEFAULT_PARAMS: AppParams = {
   population: 30,
   iterations: 50,
   seed: '',
+  algorithm: 'ooa',
 };
 
 const THEME_STORAGE_KEY = 'octopus-theme';
@@ -87,6 +88,10 @@ export default function App() {
     document.documentElement.dataset.theme = theme;
     document.documentElement.style.colorScheme = theme;
   }, [theme]);
+
+  useEffect(() => {
+    document.documentElement.dataset.algorithm = params.algorithm;
+  }, [params.algorithm]);
 
   const toggleTheme = useCallback(() => {
     setTheme((prev) => {
@@ -252,6 +257,7 @@ export default function App() {
     fd.append('population', params.population.toString());
     fd.append('iterations', params.iterations.toString());
     if (params.seed) fd.append('seed', params.seed);
+    fd.append('algorithm', params.algorithm);
 
     let jobId: string;
     try {
@@ -400,6 +406,7 @@ export default function App() {
       population: detail.population,
       iterations: detail.iterations,
       seed: detail.seed !== null ? String(detail.seed) : '',
+      algorithm: detail.algorithm ?? 'ooa',
     });
     setConfigMode('advanced');
     setView('workspace');

@@ -31,6 +31,10 @@
   --a-hi: #735cff;
   --on-a: #ffffff;
 
+  /* Algorithm-specific fixed colors */
+  --ooa: #5b3df5;
+  --sfoa: #f97316;
+
   /* Status */
   --green: #248c62;
   --green-dim: rgba(36, 140, 98, 0.12);
@@ -80,6 +84,10 @@ html[data-theme='dark'] {
   --a-hi: #b0a4ff;
   --on-a: #ffffff;
 
+  /* Algorithm-specific fixed colors (dark) */
+  --ooa: #8a76ff;
+  --sfoa: #fb923c;
+
   --green: #3dad82;
   --green-dim: rgba(61, 173, 130, 0.12);
   --red: #d86a7b;
@@ -94,6 +102,24 @@ html[data-theme='dark'] {
   --knob-bg: #ffffff;
   --knob-fg: #333333;
   --tag-bg: rgba(0, 0, 0, 0.62);
+}
+
+/* ── Starfish palette override (light) ─────────────────────────────── */
+html[data-algorithm='sfoa'] {
+  --a: #f97316;
+  --a-dim: rgba(249, 115, 22, 0.11);
+  --a-glo: rgba(249, 115, 22, 0.26);
+  --a-hi: #ea6c0a;
+  --hover: #fff7ed;
+}
+
+/* ── Starfish palette override (dark) ──────────────────────────────── */
+html[data-theme='dark'][data-algorithm='sfoa'] {
+  --a: #fb923c;
+  --a-dim: rgba(251, 146, 60, 0.13);
+  --a-glo: rgba(251, 146, 60, 0.30);
+  --a-hi: #fdba74;
+  --hover: #1f130a;
 }
 
 html,
@@ -1097,6 +1123,71 @@ select:focus-visible {
   flex-wrap: wrap;
   gap: 4px;
   margin-top: 8px;
+}
+
+/* ── Algorithm selector buttons ────────────────────────────────────── */
+.algo-btns {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-bottom: 9px;
+}
+
+.algo-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  padding: 7px 10px;
+  border: 1px solid transparent;
+  border-radius: var(--r);
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  color: var(--t2);
+  font-family: var(--ui);
+  font-size: 12px;
+  font-weight: 500;
+  transition: all 0.12s;
+  width: 100%;
+}
+
+.algo-btn:hover:not(:disabled) {
+  background: var(--hover);
+  color: var(--t1);
+}
+
+.algo-btn.active {
+  background: var(--a-dim);
+  border-color: var(--a-glo);
+  color: var(--a-hi);
+}
+
+.algo-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.algo-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--t3);
+  flex-shrink: 0;
+  transition: background 0.12s;
+}
+
+.algo-short {
+  margin-left: auto;
+  flex-shrink: 0;
+  font-size: 9px;
+  font-family: var(--mono);
+  color: var(--t3);
+  transition: color 0.12s;
+}
+
+.algo-btn.active .algo-short {
+  color: var(--a);
 }
 
 .fp-chip {

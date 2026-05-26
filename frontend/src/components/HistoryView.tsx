@@ -101,6 +101,7 @@ export default function HistoryView({ apiBase, onLoadConfig, onAuthExpired, onBa
           <thead>
             <tr>
               <th>Fecha</th>
+              <th>Algoritmo</th>
               <th>Filtro</th>
               <th>Métrica</th>
               <th>Mejor costo</th>
@@ -111,6 +112,7 @@ export default function HistoryView({ apiBase, onLoadConfig, onAuthExpired, onBa
             {items.map((item) => (
               <tr key={item.id} className="history-row">
                 <td className="history-date">{new Date(item.created_at).toLocaleString('es-CL')}</td>
+                <td className="history-algo">{item.algorithm ? item.algorithm.toUpperCase() : 'OOA'}</td>
                 <td className="history-filter">{FILTER_LABELS[item.filter_type] ?? item.filter_type}</td>
                 <td className="history-metric">{item.metric_type.toUpperCase()}</td>
                 <td className="history-cost">{item.best_cost.toFixed(4)}</td>

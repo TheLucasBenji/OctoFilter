@@ -32,6 +32,7 @@ from filters import anisotropic, bilateral, nlmeans
 from imaging import metrics as img_metrics
 from imaging import noise as img_noise
 from ooa.algorithm import ooa
+from sfoa.algorithm import sfoa
 
 app = FastAPI(title="Octopus API")
 
@@ -53,6 +54,16 @@ FILTER_LABELS = {
     "bilateral": "Bilateral",
     "anisotropic": "Anisotropic Diffusion",
     "nlmeans": "Non-Local Means",
+}
+
+ALGORITHMS = {
+    "ooa": ooa,
+    "sfoa": sfoa,
+}
+
+ALGORITHM_LABELS = {
+    "ooa": "Octopus",
+    "sfoa": "Starfish",
 }
 
 
@@ -159,6 +170,7 @@ def run_optimization(
     noisy: np.ndarray,
     filter_type: str,
     metric: str,
+    algorithm: str,
     population: int,
     iterations: int,
     seed: Optional[int],
@@ -216,7 +228,8 @@ def run_optimization(
                 "cost": float(best_cost),
             })
 
-        best_cost, best_pos, convergence = ooa(
+        algo_fn = ALGORITHMS[algorithm]
+        best_cost, best_pos, convergence = algo_fn(
             n_population=population,
             max_iter=iterations,
             lb=lb,
@@ -346,6 +359,7 @@ async def start_optimize(
     population: int = Form(30),
     iterations: int = Form(50),
     seed: Optional[int] = Form(None),
+    algorithm: str = Form("ooa"),
 ):
     data = await image.read()
     original = decode_image(data)
@@ -366,6 +380,8 @@ async def start_optimize(
         raise HTTPException(400, "noise_sigma debe ser >= 0")
     if not (0.0 <= noise_amount <= 1.0):
         raise HTTPException(400, "noise_amount debe estar entre 0 y 1")
+    if algorithm not in ALGORITHMS:
+        raise HTTPException(400, f"algorithm inválido: '{algorithm}'")
 
     rng_noise = np.random.default_rng(seed)
     if noise_type == "gaussian":
@@ -387,6 +403,7 @@ async def start_optimize(
         "population": population,
         "iterations": iterations,
         "seed": seed,
+        "algorithm": algorithm,
     }
 
     _sweep_jobs()
@@ -399,7 +416,7 @@ async def start_optimize(
     t = threading.Thread(
         target=run_optimization,
         args=(
-            job_id, original, noisy, filter_type, metric, population, iterations, seed,
+            job_id, original, noisy, filter_type, metric, algorithm, population, iterations, seed,
             q, cancelled,
             _user["id"], time.time(), params_req, original_bytes, noisy_bytes,
         ),
