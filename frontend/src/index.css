@@ -51,7 +51,8 @@
   --shadow-md: 0 8px 24px -18px rgba(14, 17, 22, 0.35);
   --chart-grid: rgba(14, 17, 22, 0.08);
   --mark-eye: rgba(255, 255, 255, 0.92);
-  --logo-color: #000000;
+  --logo-color: var(--ooa);
+  --logo-fill: var(--logo-color);
   --compare-line: rgba(255, 255, 255, 0.92);
   --knob-bg: #ffffff;
   --knob-fg: #2a2f3a;
@@ -97,7 +98,8 @@ html[data-theme='dark'] {
   --shadow-sm: 0 1px 0 rgba(0, 0, 0, 0.4);
   --shadow-md: 0 8px 28px -16px rgba(0, 0, 0, 0.75);
   --chart-grid: rgba(255, 255, 255, 0.055);
-  --logo-color: #ffffff;
+  --logo-color: var(--ooa);
+  --logo-fill: var(--logo-color);
   --compare-line: rgba(255, 255, 255, 0.82);
   --knob-bg: #ffffff;
   --knob-fg: #333333;
@@ -111,6 +113,7 @@ html[data-algorithm='sfoa'] {
   --a-glo: rgba(255, 124, 53, 0.26);
   --a-hi: #ff8b4a;
   --hover: #fff7f0;
+  --logo-fill: radial-gradient(80% 80% at 100% 100%, var(--sfoa) 0%, var(--ooa) 120%);
 }
 
 /* ── Starfish palette override (dark) ──────────────────────────────── */
@@ -257,7 +260,7 @@ select:focus-visible {
   width: 38px;
   height: 38px;
   display: block;
-  background: currentColor;
+  background: var(--logo-fill);
   -webkit-mask-repeat: no-repeat;
   mask-repeat: no-repeat;
   -webkit-mask-position: center;
@@ -597,7 +600,7 @@ select:focus-visible {
   width: 56px;
   height: 56px;
   display: block;
-  background: var(--logo-color);
+  background: var(--logo-fill);
   -webkit-mask-repeat: no-repeat;
   mask-repeat: no-repeat;
   -webkit-mask-position: center;
@@ -667,7 +670,7 @@ select:focus-visible {
   width: 40px;
   height: 40px;
   display: block;
-  background: currentColor;
+  background: var(--logo-fill);
   -webkit-mask-repeat: no-repeat;
   mask-repeat: no-repeat;
   -webkit-mask-position: center;
@@ -938,7 +941,6 @@ select:focus-visible {
 .sb-group:last-of-type {
   border-bottom: none;
 }
-
 
 .step-heading {
   display: flex;
@@ -1496,6 +1498,19 @@ input[type='range']:disabled {
 .sb-run {
   margin-top: auto;
   background: var(--panel);
+  position: relative;
+}
+
+.sb-run::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -10px;
+  height: 10px;
+  pointer-events: none;
+  background: linear-gradient(to top, var(--a-glo), transparent);
+  opacity: 0.7;
 }
 
 /* Progress */
