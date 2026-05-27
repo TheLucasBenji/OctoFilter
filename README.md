@@ -9,7 +9,7 @@ alternativo seleccionable desde la interfaz.
 
 **Referencias**:
 - [Repositorio original de OOA](https://github.com/Chrisong-gh/MOOA)
-- [Repositorio original de SFOA (MATLAB)](https://es.mathworks.com/matlabcentral/fileexchange/173735-starfish-optimization-algorithm-sfoa)
+- [Repositorio original de SFOA](https://es.mathworks.com/matlabcentral/fileexchange/173735-starfish-optimization-algorithm-sfoa)
 
 ---
 
