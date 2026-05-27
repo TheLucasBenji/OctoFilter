@@ -456,7 +456,7 @@ export default function App() {
           </span>
           <span className="brand-name">OctoFilter</span>
           <span className="brand-sep" />
-          <span className="brand-sub">OOA · Restauración de imágenes</span>
+          <span className="brand-sub">Optimizador de Parámetros de Filtros de Imagen</span>
         </div>
 
         <div className="mode-tabs" role="tablist" aria-label="Modo de configuración">
