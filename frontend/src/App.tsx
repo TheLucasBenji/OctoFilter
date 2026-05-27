@@ -16,6 +16,7 @@ import ImageWorkspace from './components/ImageWorkspace';
 import AnalysisSection from './components/AnalysisSection';
 import LoginScreen from './components/LoginScreen';
 import HistoryView from './components/HistoryView';
+import PdfExportButton from './components/PdfExportButton';
 import { exportReportPdf } from './utils/pdfReport';
 
 const API = 'http://localhost:8000';
@@ -542,9 +543,9 @@ export default function App() {
 
               {result && (
                 <div className="workspace-pdf-bar">
-                  <button
+                  <PdfExportButton
                     className="workspace-pdf-btn"
-                    onClick={() => exportReportPdf({
+                    onExport={() => exportReportPdf({
                       filterType:   params.filterType,
                       metricType:   params.metricType,
                       noiseType:    params.noiseType,
@@ -560,9 +561,7 @@ export default function App() {
                       noisyImage,
                       resultImage,
                     })}
-                  >
-                    Exportar PDF
-                  </button>
+                  />
                 </div>
               )}
 
