@@ -1675,7 +1675,6 @@ input[type='range']:disabled {
   max-height: 320px;
   object-fit: contain;
   background: var(--raised);
-  image-rendering: pixelated;
 }
 
 .compare-overlay {
@@ -1693,7 +1692,6 @@ input[type='range']:disabled {
   top: 0;
   left: 0;
   display: block;
-  image-rendering: pixelated;
   background: transparent;
 }
 
@@ -1761,7 +1759,6 @@ input[type='range']:disabled {
   max-height: 320px;
   object-fit: contain;
   background: var(--raised);
-  image-rendering: pixelated;
 }
 
 .result-empty {
@@ -2095,8 +2092,50 @@ input[type='range']:disabled {
     color 0.12s;
 }
 
-.workspace-pdf-btn:hover {
+.pdf-export-btn {
+  position: relative;
+  overflow: hidden;
+}
+
+.pdf-export-btn-label {
+  position: relative;
+  z-index: 1;
+}
+
+.pdf-export-btn-progress {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  overflow: hidden;
   background: var(--a-dim);
+}
+
+.pdf-export-btn-progress::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -45%;
+  width: 45%;
+  background: var(--a);
+  animation: pdf-export-progress 0.85s ease-in-out infinite;
+}
+
+@keyframes pdf-export-progress {
+  to {
+    left: 100%;
+  }
+}
+
+.workspace-pdf-btn:hover:not(:disabled) {
+  background: var(--a-dim);
+}
+
+.workspace-pdf-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 /* ── History toggle button ─────────────────────────────────────────── */
@@ -2259,7 +2298,7 @@ input[type='range']:disabled {
   color: var(--a);
   border-color: var(--a);
 }
-.hist-btn-pdf:hover {
+.hist-btn-pdf:hover:not(:disabled) {
   background: var(--a-dim);
 }
 .hist-btn:disabled {
@@ -2352,8 +2391,13 @@ input[type='range']:disabled {
   transition: background 0.12s;
   white-space: nowrap;
 }
-.history-pdf-btn:hover {
+.history-pdf-btn:hover:not(:disabled) {
   background: var(--a-dim);
+}
+
+.history-pdf-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 @media (max-width: 860px) {

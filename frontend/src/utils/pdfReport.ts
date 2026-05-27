@@ -68,10 +68,19 @@ const GREEN: RGB = [36, 140, 98];
 const RED: RGB   = [200, 50, 75];
 const LINE: RGB  = [210, 213, 220];
 
-export function exportReportPdf(report: ReportData): void {
+const PDF_WORKSPACE_IMAGE_MAX_H = 320 * 72 / 96;
+const IMAGE_ROW_GAP = 16;
+
+function imageDataUri(base64: string): string {
+  return `data:image/png;base64,${base64}`;
+}
+
+export async function exportReportPdf(report: ReportData): Promise<void> {
   const doc = new jsPDF({ unit: 'pt', format: 'a4' });
   const PW = 595.28;
+  const PH = 841.89;
   const ML = 40;
+  const MB = 40;
   const CW = PW - ML * 2;
   let y = 40;
 
@@ -90,6 +99,12 @@ export function exportReportPdf(report: ReportData): void {
     doc.setDrawColor(LINE[0], LINE[1], LINE[2]);
     doc.setLineWidth(0.5);
     doc.line(ML, yy, ML + CW, yy);
+  }
+
+  function ensureSpace(height: number) {
+    if (y + height <= PH - MB) return;
+    doc.addPage();
+    y = 40;
   }
 
   // ── 1. Header ──────────────────────────────────────────────────────────
@@ -148,32 +163,42 @@ export function exportReportPdf(report: ReportData): void {
   );
 
   if (imgs.length > 0) {
+    ensureSpace(180);
     txt('IMÁGENES', ML, y, 8, false, T3);
     y += 11;
-    const gap = 10;
-    const slotW = (CW - gap * (imgs.length - 1)) / imgs.length;
-    const boxH  = slotW * 0.85;
-    const imgTop = y + 5;
-    imgs.forEach((im, i) => {
-      const slotX  = ML + i * (slotW + gap);
-      txt(im.label, slotX + slotW / 2, y, 8, false, T2, 'center');
-      const dataUri = 'data:image/png;base64,' + im.data;
-      const props   = doc.getImageProperties(dataUri);
-      const ratio   = props.height / props.width;
-      let drawW = slotW;
-      let drawH = drawW * ratio;
-      if (drawH > boxH) {
-        drawH = boxH;
-        drawW = drawH / ratio;
-      }
-      const offsetX = slotX + (slotW - drawW) / 2;
-      doc.addImage(dataUri, 'PNG', offsetX, imgTop, drawW, drawH);
+
+    const imageItems = imgs.map((im) => {
+      const dataUri = imageDataUri(im.data);
+      const props = doc.getImageProperties(dataUri);
+      return {
+        ...im,
+        dataUri,
+        ratio: props.height / props.width,
+      };
     });
-    y += boxH + 20;
+
+    for (const im of imageItems) {
+      let drawW = CW;
+      let drawH = drawW * im.ratio;
+      if (drawH > PDF_WORKSPACE_IMAGE_MAX_H) {
+        drawH = PDF_WORKSPACE_IMAGE_MAX_H;
+        drawW = drawH / im.ratio;
+      }
+
+      ensureSpace(drawH + 24);
+      txt(im.label, ML + CW / 2, y, 8, false, T2, 'center');
+      y += 8;
+
+      const offsetX = ML + (CW - drawW) / 2;
+      doc.addImage(im.dataUri, 'PNG', offsetX, y, drawW, drawH, undefined, 'NONE');
+      y += drawH + IMAGE_ROW_GAP;
+    }
+
     hline(y); y += 14;
   }
 
   // ── 4. Metrics before/after ────────────────────────────────────────────
+  ensureSpace(110);
   txt('MÉTRICAS ANTES / DESPUÉS', ML, y, 8, false, T3);
   y += 11;
 
@@ -208,6 +233,7 @@ export function exportReportPdf(report: ReportData): void {
   hline(y); y += 14;
 
   // ── 5. Best params ─────────────────────────────────────────────────────
+  ensureSpace(70);
   txt('MEJORES PARÁMETROS', ML, y, 8, false, T3);
   y += 11;
   const pe = Object.entries(report.params);
@@ -221,6 +247,7 @@ export function exportReportPdf(report: ReportData): void {
   hline(y); y += 14;
 
   // ── 6. Convergence chart ───────────────────────────────────────────────
+  ensureSpace(160);
   txt('CONVERGENCIA', ML, y, 8, false, T3);
   y += 12;
 
@@ -286,6 +313,7 @@ export function exportReportPdf(report: ReportData): void {
   y += CH + 24;
 
   // ── Footer ─────────────────────────────────────────────────────────────
+  ensureSpace(28);
   hline(y);
   txt('Generado por OctoFilter', ML, y + 11, 7, false, T3);
   txt(new Date().toLocaleString('es-CL'), ML + CW, y + 11, 7, false, T3, 'right');

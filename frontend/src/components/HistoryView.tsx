@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { HistoryDetail, HistorySummary } from '../types';
 import HistoryDetailView from './HistoryDetail';
 import Modal from './Modal';
+import PdfExportButton from './PdfExportButton';
 import { FILTER_LABELS, exportReportPdf, historyDetailToReport } from '../utils/pdfReport';
 
 interface Props {
@@ -16,7 +17,6 @@ export default function HistoryView({ apiBase, onLoadConfig, onAuthExpired, onBa
   const [loading, setLoading] = useState(true);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
-  const [pdfId, setPdfId] = useState<number | null>(null);
 
   const loadHistory = useCallback(async () => {
     setLoading(true);
@@ -68,16 +68,11 @@ export default function HistoryView({ apiBase, onLoadConfig, onAuthExpired, onBa
   };
 
   const handleExportPdf = async (id: number) => {
-    setPdfId(id);
-    try {
-      const r = await fetch(`${apiBase}/api/history/${id}`, { credentials: 'include' });
-      if (r.status === 401) { onAuthExpired(); return; }
-      if (r.ok) {
-        const detail = (await r.json()) as HistoryDetail;
-        exportReportPdf(historyDetailToReport(detail));
-      }
-    } finally {
-      setPdfId(null);
+    const r = await fetch(`${apiBase}/api/history/${id}`, { credentials: 'include' });
+    if (r.status === 401) { onAuthExpired(); return; }
+    if (r.ok) {
+      const detail = (await r.json()) as HistoryDetail;
+      await exportReportPdf(historyDetailToReport(detail));
     }
   };
 
@@ -123,12 +118,10 @@ export default function HistoryView({ apiBase, onLoadConfig, onAuthExpired, onBa
                   <button className="hist-btn hist-btn-load" onClick={() => handleLoadConfigById(item.id)}>
                     Cargar config
                   </button>
-                  <button
+                  <PdfExportButton
                     className="hist-btn hist-btn-pdf"
-                    onClick={() => handleExportPdf(item.id)}
-                    disabled={pdfId === item.id}>
-                    {pdfId === item.id ? '...' : 'Exportar PDF'}
-                  </button>
+                    onExport={() => handleExportPdf(item.id)}
+                  />
                   <button
                     className="hist-btn hist-btn-del"
                     onClick={() => handleDelete(item.id)}
