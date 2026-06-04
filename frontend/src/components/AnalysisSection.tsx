@@ -1,4 +1,4 @@
-import { ConvergencePoint, MetricType, OptimizationResult } from '../types';
+import { ConvergencePoint, FilterType, MetricType, OptimizationResult } from '../types';
 import { METRIC_HELP, TERM_HELP } from '../helpTexts';
 import ConvergenceChart from './ConvergenceChart';
 import InfoHint from './InfoHint';
@@ -7,11 +7,12 @@ import MetricsPanel from './MetricsPanel';
 interface Props {
   convergence: ConvergencePoint[];
   result: OptimizationResult | null;
+  filterType: FilterType;
   metricType: MetricType;
   totalIterations: number;
 }
 
-export default function AnalysisSection({ convergence, result, metricType, totalIterations }: Props) {
+export default function AnalysisSection({ convergence, result, filterType, metricType, totalIterations }: Props) {
   return (
     <div className="analysis">
       <div className="chart-section">
@@ -36,7 +37,7 @@ export default function AnalysisSection({ convergence, result, metricType, total
         )}
       </div>
 
-      {result && <MetricsPanel result={result} metricType={metricType} />}
+      {result && <MetricsPanel result={result} filterType={filterType} metricType={metricType} />}
     </div>
   );
 }

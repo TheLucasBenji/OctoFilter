@@ -26,6 +26,44 @@ LOWER_BOUNDS = np.array([5.0, 10.0, 0.05, 1.0])
 UPPER_BOUNDS = np.array([50.0, 100.0, 0.25, 2.0])
 DIM = 4
 PARAM_NAMES = ["Iteraciones", "Kappa", "Gamma", "Opción (1=exp, 2=rec)"]
+PARAM_METADATA = [
+    {
+        "key": "niter",
+        "display_name": "niter · Diffusion iterations",
+        "scientific_name": "Diffusion iterations",
+        "symbol": "niter",
+        "common_name": "niter",
+        "aliases": ["iterations", "iteraciones", "diffusion steps"],
+        "description": "Número de pasos de difusión aplicados por el modelo de Perona-Malik.",
+    },
+    {
+        "key": "kappa",
+        "display_name": "κ · Gradient threshold (kappa)",
+        "scientific_name": "Gradient threshold",
+        "symbol": "κ",
+        "common_name": "kappa",
+        "aliases": ["conductance", "gradient threshold", "edge threshold"],
+        "description": "Umbral de gradiente que regula la preservación de bordes en Perona-Malik.",
+    },
+    {
+        "key": "gamma",
+        "display_name": "γ · Diffusion rate / time step",
+        "scientific_name": "Diffusion rate / time step",
+        "symbol": "γ",
+        "common_name": "gamma",
+        "aliases": ["time step", "integration constant", "diffusion rate"],
+        "description": "Tasa de difusión o paso temporal que controla la intensidad de cada actualización.",
+    },
+    {
+        "key": "option",
+        "display_name": "g(|∇I|) · Conduction function",
+        "scientific_name": "Conduction function",
+        "symbol": "g(|∇I|)",
+        "common_name": "option",
+        "aliases": ["diffusion function", "flux function", "conductance function"],
+        "description": "Función de conducción de Perona-Malik: exponencial o recíproca.",
+    },
+]
 
 
 def _perona_malik(

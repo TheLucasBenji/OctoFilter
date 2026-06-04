@@ -4,6 +4,31 @@ export type NoiseType = 'gaussian' | 'sp';
 export type AlgorithmType = 'ooa' | 'sfoa';
 export type ConfigMode = 'basic' | 'advanced';
 export type ThemePreference = 'light' | 'dark';
+export type ParamKind = 'float' | 'int' | 'odd-int' | 'choice';
+
+export interface FilterParam {
+  name: string;
+  lb: number;
+  ub: number;
+  manual_lb?: number;
+  manual_ub?: number;
+  kind?: ParamKind;
+  step?: number;
+  choices?: number[];
+  key?: string;
+  display_name?: string;
+  scientific_name?: string;
+  symbol?: string;
+  common_name?: string;
+  aliases?: string[];
+  description?: string;
+}
+
+export interface FilterInfo {
+  label: string;
+  dim: number;
+  params: FilterParam[];
+}
 
 export interface AuthUser {
   id: number;

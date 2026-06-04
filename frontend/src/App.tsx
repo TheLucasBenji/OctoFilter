@@ -604,6 +604,7 @@ export default function App() {
                     <AnalysisSection
                       convergence={convergence}
                       result={result}
+                      filterType={params.filterType}
                       metricType={params.metricType}
                       totalIterations={params.iterations}
                     />

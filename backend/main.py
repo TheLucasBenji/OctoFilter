@@ -359,17 +359,23 @@ def run_optimization(
 
 @app.get("/api/filters")
 def get_filters(_user: dict = Depends(require_user)):
+    def build_param(mod, key: str, idx: int, name: str, lb: float, ub: float) -> dict:
+        metadata = getattr(mod, "PARAM_METADATA", [])
+        param_meta = dict(metadata[idx]) if idx < len(metadata) else {}
+        return {
+            "name": name,
+            "lb": float(lb),
+            "ub": float(ub),
+            **MANUAL_PARAM_META[key][idx],
+            **param_meta,
+        }
+
     return {
         key: {
             "label": FILTER_LABELS[key],
             "dim": mod.DIM,
             "params": [
-                {
-                    "name": name,
-                    "lb": float(lb),
-                    "ub": float(ub),
-                    **MANUAL_PARAM_META[key][idx],
-                }
+                build_param(mod, key, idx, name, lb, ub)
                 for idx, (name, lb, ub) in enumerate(zip(mod.PARAM_NAMES, mod.LOWER_BOUNDS, mod.UPPER_BOUNDS))
             ],
         }

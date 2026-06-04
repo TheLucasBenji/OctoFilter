@@ -18,6 +18,35 @@ LOWER_BOUNDS = np.array([3.0, 10.0, 10.0])
 UPPER_BOUNDS = np.array([15.0, 200.0, 200.0])
 DIM = 3
 PARAM_NAMES = ["d (diameter)", "sigma Color", "sigma Space"]
+PARAM_METADATA = [
+    {
+        "key": "d",
+        "display_name": "d · Neighborhood diameter",
+        "scientific_name": "Neighborhood diameter",
+        "symbol": "d",
+        "common_name": "d",
+        "aliases": ["diameter", "diametro", "neighborhood diameter"],
+        "description": "Diámetro de la vecindad espacial usada por el filtro bilateral.",
+    },
+    {
+        "key": "sigmaColor",
+        "display_name": "σr · Range sigma (sigmaColor)",
+        "scientific_name": "Range sigma",
+        "symbol": "σr",
+        "common_name": "sigmaColor",
+        "aliases": ["sigma color", "range sigma", "intensity sigma", "sigma_r"],
+        "description": "Sigma de rango que controla la similitud de intensidades en el filtro bilateral.",
+    },
+    {
+        "key": "sigmaSpace",
+        "display_name": "σs · Spatial sigma (sigmaSpace)",
+        "scientific_name": "Spatial sigma",
+        "symbol": "σs",
+        "common_name": "sigmaSpace",
+        "aliases": ["sigma space", "spatial sigma", "domain sigma", "sigma_s"],
+        "description": "Sigma espacial que controla la influencia de píxeles vecinos.",
+    },
+]
 
 
 def _get_d(val: float) -> int:
