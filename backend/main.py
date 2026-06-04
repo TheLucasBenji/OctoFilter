@@ -56,6 +56,25 @@ FILTER_LABELS = {
     "nlmeans": "Non-Local Means",
 }
 
+MANUAL_PARAM_META = {
+    "bilateral": [
+        {"manual_lb": 1.0, "manual_ub": 101.0, "kind": "odd-int", "step": 2.0},
+        {"manual_lb": 0.0, "manual_ub": 500.0, "kind": "float", "step": 0.1},
+        {"manual_lb": 0.0, "manual_ub": 500.0, "kind": "float", "step": 0.1},
+    ],
+    "anisotropic": [
+        {"manual_lb": 1.0, "manual_ub": 250.0, "kind": "int", "step": 1.0},
+        {"manual_lb": 1.0, "manual_ub": 300.0, "kind": "float", "step": 0.1},
+        {"manual_lb": 0.01, "manual_ub": 0.25, "kind": "float", "step": 0.01},
+        {"manual_lb": 1.0, "manual_ub": 2.0, "kind": "choice", "step": 1.0, "choices": [1, 2]},
+    ],
+    "nlmeans": [
+        {"manual_lb": 0.1, "manual_ub": 100.0, "kind": "float", "step": 0.1},
+        {"manual_lb": 3.0, "manual_ub": 31.0, "kind": "odd-int", "step": 2.0},
+        {"manual_lb": 5.0, "manual_ub": 101.0, "kind": "odd-int", "step": 2.0},
+    ],
+}
+
 ALGORITHMS = {
     "ooa": ooa,
     "sfoa": sfoa,
@@ -136,6 +155,40 @@ def encode_image(img: np.ndarray) -> str:
 def decode_image(data: bytes) -> np.ndarray:
     arr = np.frombuffer(data, np.uint8)
     return cv2.imdecode(arr, cv2.IMREAD_GRAYSCALE)
+
+
+def _nearest_choice(value: float, choices: list[int]) -> float:
+    return float(min(choices, key=lambda choice: abs(choice - value)))
+
+
+def _coerce_manual_value(value: float, meta: dict) -> float:
+    kind = meta.get("kind", "float")
+
+    if kind == "choice":
+        return _nearest_choice(value, meta["choices"])
+
+    lb = float(meta["manual_lb"])
+    ub = float(meta["manual_ub"])
+
+    if kind == "float":
+        return float(np.clip(value, lb, ub))
+
+    coerced = int(round(float(np.clip(value, lb, ub))))
+    min_val = int(lb)
+    max_val = int(ub)
+
+    if kind == "odd-int" and coerced % 2 == 0:
+        coerced = coerced - 1 if coerced >= max_val else coerced + 1
+
+    return float(np.clip(coerced, min_val, max_val))
+
+
+def _coerce_manual_params(filter_type: str, params_arr: np.ndarray) -> np.ndarray:
+    meta = MANUAL_PARAM_META[filter_type]
+    return np.array(
+        [_coerce_manual_value(float(value), param_meta) for value, param_meta in zip(params_arr, meta)],
+        dtype=float,
+    )
 
 
 @app.post("/api/auth/login")
@@ -311,11 +364,62 @@ def get_filters(_user: dict = Depends(require_user)):
             "label": FILTER_LABELS[key],
             "dim": mod.DIM,
             "params": [
-                {"name": name, "lb": float(lb), "ub": float(ub)}
-                for name, lb, ub in zip(mod.PARAM_NAMES, mod.LOWER_BOUNDS, mod.UPPER_BOUNDS)
+                {
+                    "name": name,
+                    "lb": float(lb),
+                    "ub": float(ub),
+                    **MANUAL_PARAM_META[key][idx],
+                }
+                for idx, (name, lb, ub) in enumerate(zip(mod.PARAM_NAMES, mod.LOWER_BOUNDS, mod.UPPER_BOUNDS))
             ],
         }
         for key, mod in FILTER_MODULES.items()
+    }
+
+
+@app.post("/api/manual-filter")
+async def manual_filter(
+    _user: dict = Depends(require_user),
+    image: UploadFile = File(...),
+    filter_type: str = Form("bilateral"),
+    params: str = Form(...),
+):
+    data = await image.read()
+    img = decode_image(data)
+    if img is None:
+        raise HTTPException(400, "Invalid image")
+
+    if filter_type not in FILTER_MODULES:
+        raise HTTPException(400, f"filter_type inválido: '{filter_type}'")
+
+    try:
+        raw_params = json.loads(params)
+    except Exception as exc:
+        raise HTTPException(400, "params inválidos") from exc
+
+    if not isinstance(raw_params, (list, tuple)):
+        raise HTTPException(400, "params inválidos")
+
+    fmod = FILTER_MODULES[filter_type]
+    if len(raw_params) != fmod.DIM:
+        raise HTTPException(400, f"params debe tener {fmod.DIM} valores")
+
+    try:
+        params_arr = np.array(raw_params, dtype=float)
+    except Exception as exc:
+        raise HTTPException(400, "params inválidos") from exc
+
+    if not np.all(np.isfinite(params_arr)):
+        raise HTTPException(400, "params inválidos")
+
+    params_arr = _coerce_manual_params(filter_type, params_arr)
+    result = fmod.apply(img, params_arr)
+    result_u8 = np.clip(result, 0, 255).astype(np.uint8)
+
+    return {
+        "original_image": encode_image(img),
+        "result_image": encode_image(result_u8),
+        "params_used": {name: float(val) for name, val in zip(fmod.PARAM_NAMES, params_arr)},
     }
 
 
