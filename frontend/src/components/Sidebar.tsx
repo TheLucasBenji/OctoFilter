@@ -5,6 +5,7 @@ import { ALGORITHM_HELP, FILTER_HELP, METRIC_HELP, NOISE_HELP, TERM_HELP, getPar
 import { getParamDescription, getParamDisplayName } from '../paramMetadata';
 import InfoHint from './InfoHint';
 import MetricSelector from './MetricSelector';
+import ParamLabel from './ParamLabel';
 
 const API = 'http://localhost:8000';
 
@@ -404,9 +405,16 @@ export default function Sidebar({
                     const label = getParamDisplayName(params.filterType, p.name, p);
                     const help = getParamDescription(params.filterType, p.name, p) ?? getParamHelp(p.name);
                     return help ?
-                        <InfoHint key={p.key ?? p.name} label={label} description={help} icon={false} className="fp-chip" />
+                        <InfoHint
+                          key={p.key ?? p.name}
+                          label={<ParamLabel filterType={params.filterType} name={p.name} param={p} />}
+                          description={help}
+                          icon={false}
+                          className="fp-chip"
+                          ariaLabel={`${label}: ${help}`}
+                        />
                       : <span key={p.key ?? p.name} className="fp-chip">
-                          {label}
+                          <ParamLabel filterType={params.filterType} name={p.name} param={p} />
                         </span>;
                   })}
                 </div>

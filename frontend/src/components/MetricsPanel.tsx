@@ -2,6 +2,7 @@ import { FilterType, OptimizationResult, MetricType } from '../types';
 import { METRIC_HELP, TERM_HELP, getParamHelp } from '../helpTexts';
 import { getParamDescription, getParamDisplayName } from '../paramMetadata';
 import InfoHint from './InfoHint';
+import ParamLabel from './ParamLabel';
 
 interface Props { result: OptimizationResult; filterType: FilterType; metricType: MetricType; }
 
@@ -98,9 +99,15 @@ export default function MetricsPanel({ result, filterType, metricType }: Props) 
             return (
               <div key={k} className="pt-row">
                 {help ? (
-                  <InfoHint label={label} description={help} icon={false} className="pt-key" />
+                  <InfoHint
+                    label={<ParamLabel filterType={filterType} name={k} />}
+                    description={help}
+                    icon={false}
+                    className="pt-key"
+                    ariaLabel={`${label}: ${help}`}
+                  />
                 ) : (
-                  <span className="pt-key">{label}</span>
+                  <span className="pt-key"><ParamLabel filterType={filterType} name={k} /></span>
                 )}
                 <span className="pt-val">{Number.isInteger(v) ? v : (v as number).toFixed(3)}</span>
               </div>

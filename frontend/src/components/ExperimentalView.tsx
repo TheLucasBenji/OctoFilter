@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FilterInfo, FilterParam, FilterType, ParamKind } from '../types';
 import { FILTER_HELP, getParamHelp } from '../helpTexts';
-import { getParamDescription, getParamDisplayName, normalizeParamName } from '../paramMetadata';
+import { getParamDescription, normalizeParamName } from '../paramMetadata';
 import InfoHint from './InfoHint';
+import ParamLabel, { getParamAccessibleLabel } from './ParamLabel';
 
 const FILTERS: { value: FilterType; label: string; short: string; desc: string }[] = [
   {
@@ -328,7 +329,7 @@ function ExperimentalSidebar({
           ) : (
             <div className="exp-params">
               {activeFilter.params.map((p, idx) => {
-                const label = getParamDisplayName(filterType, p.name, p);
+                const label = getParamAccessibleLabel(filterType, p.name, p);
                 const help = getExperimentalParamHelp(filterType, p);
                 const value = activeParams[idx];
                 const kind = getParamKind(p);
@@ -337,7 +338,12 @@ function ExperimentalSidebar({
                 return (
                   <div key={`${filterType}-${p.key ?? p.name}`} className="field">
                     <label className="field-label">
-                      <InfoHint label={label} description={help} className="field-label-name" />
+                      <InfoHint
+                        label={<ParamLabel filterType={filterType} name={p.name} param={p} />}
+                        description={help}
+                        className="field-label-name"
+                        ariaLabel={`${label}: ${help}`}
+                      />
                       <span className="field-label-val">{formatParamValue(value, p)}</span>
                     </label>
                     {kind === 'choice' ?
