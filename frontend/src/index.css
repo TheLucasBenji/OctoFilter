@@ -708,12 +708,18 @@ select:focus-visible {
   font-family: var(--mono);
 }
 
+.mode-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 2px;
+}
+
 .mode-tabs {
   display: flex;
   align-items: center;
   gap: 2px;
   padding: 2px;
-  margin-left: 2px;
   background: var(--raised);
   border: 1px solid var(--line);
   border-radius: var(--r);
@@ -750,6 +756,49 @@ select:focus-visible {
   border-color: var(--line-md);
   color: var(--a);
   box-shadow: var(--shadow-sm);
+}
+
+.exp-toggle-btn {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: var(--raised);
+  color: var(--t2);
+  cursor: pointer;
+  transition:
+    background 0.12s,
+    border-color 0.12s,
+    color 0.12s;
+}
+
+.exp-toggle-btn:hover {
+  background: var(--hover);
+  border-color: var(--line-md);
+  color: var(--a);
+}
+
+.exp-toggle-btn.active {
+  background:
+    linear-gradient(var(--panel), var(--panel)) padding-box,
+    linear-gradient(135deg, #ff5f84, #ffc647, #46cd91, #409aff, #9e60ff) border-box;
+  border-color: transparent;
+  color: var(--a-hi);
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--a) 14%, transparent),
+    var(--shadow-sm);
+}
+
+.exp-toggle-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.exp-toggle-btn svg {
+  width: 16px;
+  height: 16px;
 }
 
 /* ── History button */
@@ -920,6 +969,58 @@ select:focus-visible {
 
 .sidebar-advanced {
   overflow-y: auto;
+}
+
+.sidebar-experimental {
+  position: relative;
+  overflow-y: auto;
+  border-right-color: color-mix(in srgb, var(--a) 28%, var(--line));
+  background:
+    radial-gradient(circle at 0% 8%, rgba(255, 95, 132, 0.18), transparent 34%),
+    radial-gradient(circle at 100% 6%, rgba(64, 154, 255, 0.16), transparent 36%),
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--panel) 70%, transparent) 0%,
+      color-mix(in srgb, var(--panel) 88%, transparent) 68%,
+      var(--panel) 100%
+    ),
+    linear-gradient(
+      135deg,
+      rgba(255, 95, 132, 0.3) 0%,
+      rgba(255, 198, 71, 0.24) 24%,
+      rgba(70, 205, 145, 0.24) 48%,
+      rgba(64, 154, 255, 0.26) 72%,
+      rgba(158, 96, 255, 0.26) 100%
+    );
+  box-shadow: inset -1px 0 0 color-mix(in srgb, var(--a) 16%, transparent);
+}
+
+.sidebar-experimental::before {
+  content: '';
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: block;
+  height: 3px;
+  flex: 0 0 auto;
+  background: linear-gradient(90deg, #ff5f84 0%, #ffc647 24%, #46cd91 48%, #409aff 72%, #9e60ff 100%);
+}
+
+.sidebar-experimental .sb-group {
+  border-bottom-color: color-mix(in srgb, var(--line) 70%, var(--a) 30%);
+}
+
+.sidebar-experimental .step-num {
+  background: linear-gradient(135deg, #ff5f84 0%, #ffc647 34%, #46cd91 68%, #409aff 100%);
+  color: #101217;
+  border-color: rgba(255, 255, 255, 0.28);
+}
+
+.sidebar-experimental .filter-btn.active {
+  background:
+    linear-gradient(var(--raised), var(--raised)) padding-box,
+    linear-gradient(135deg, #ff5f84, #ffc647, #46cd91, #409aff, #9e60ff) border-box;
+  border-color: transparent;
 }
 
 .sidebar::-webkit-scrollbar {
@@ -1561,6 +1662,161 @@ input[type='range']:disabled {
 .main::-webkit-scrollbar-thumb {
   background: var(--line-md);
   border-radius: 3px;
+}
+
+/* ── Experimental view ───────────────────────────── */
+
+.exp-main {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px;
+  min-height: 0;
+}
+
+.exp-action-row {
+  display: grid;
+  gap: 8px;
+}
+
+.exp-reset-btn {
+  height: 32px;
+  width: 100%;
+  border: 1px solid var(--line-md);
+  border-radius: var(--r);
+  background: var(--raised);
+  color: var(--t2);
+  font-family: var(--ui);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    background 0.12s,
+    border-color 0.12s,
+    color 0.12s;
+}
+
+.exp-reset-btn:hover:not(:disabled) {
+  background: var(--hover);
+  color: var(--t1);
+}
+
+.exp-reset-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.exp-params {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+
+.exp-param-control {
+  display: grid;
+  gap: 8px;
+}
+
+.exp-param-control input[type='range'] {
+  height: 14px;
+  background: transparent;
+}
+
+.exp-param-control input[type='range']::-webkit-slider-runnable-track {
+  height: 3px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #ff5f84 0%, #ffc647 24%, #46cd91 48%, #409aff 72%, #9e60ff 100%);
+  opacity: 0.62;
+}
+
+.exp-param-control input[type='range']::-webkit-slider-thumb {
+  margin-top: -5px;
+  width: 13px;
+  height: 13px;
+  border: 2px solid var(--panel);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--a) 24%, transparent);
+}
+
+.exp-param-control input[type='range']::-moz-range-track {
+  height: 3px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #ff5f84 0%, #ffc647 24%, #46cd91 48%, #409aff 72%, #9e60ff 100%);
+  opacity: 0.62;
+}
+
+.exp-param-control input[type='range']::-moz-range-thumb {
+  width: 13px;
+  height: 13px;
+  border: 2px solid var(--panel);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--a) 24%, transparent);
+}
+
+.exp-param-range {
+  margin-top: 4px;
+  font-family: var(--mono);
+  font-size: 9px;
+  color: var(--t3);
+  line-height: 1.35;
+}
+
+.exp-choice-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 5px;
+}
+
+.exp-choice-btn {
+  height: 30px;
+  border: 1px solid var(--line-md);
+  border-radius: var(--r);
+  background: var(--raised);
+  color: var(--t2);
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    background 0.12s,
+    border-color 0.12s,
+    color 0.12s,
+    transform 0.12s;
+}
+
+.exp-choice-btn:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--a) 40%, var(--line-md));
+  color: var(--t1);
+}
+
+.exp-choice-btn.active {
+  background: var(--a-dim);
+  border-color: var(--a-glo);
+  color: var(--a-hi);
+}
+
+.exp-choice-btn:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.exp-choice-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.exp-empty {
+  padding: 10px;
+  border: 1px dashed var(--line-md);
+  border-radius: var(--r);
+  font-size: 11px;
+  color: var(--t3);
+  font-family: var(--mono);
+}
+
+.sidebar-experimental .run-btn {
+  min-height: 36px;
+  height: auto;
+  padding: 0 10px;
+  line-height: 1.2;
+  letter-spacing: 0.02em;
 }
 
 /* ── Image workspace ─────────────────────────────── */
@@ -2436,6 +2692,10 @@ input[type='range']:disabled {
   }
   .metrics-row {
     grid-template-columns: 1fr;
+  }
+
+  .exp-main {
+    padding: 12px;
   }
 
   .metric-tile,

@@ -41,7 +41,7 @@ export interface OptimizationResult {
 }
 
 export type AppState = 'idle' | 'previewing' | 'optimizing' | 'complete' | 'error';
-export type AppView = 'workspace' | 'history';
+export type AppView = 'workspace' | 'history' | 'experimental';
 
 export interface ConvergencePoint {
   iteration: number;

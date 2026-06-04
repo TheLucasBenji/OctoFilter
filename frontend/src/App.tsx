@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { FiLogOut } from 'react-icons/fi';
+import { AiTwotoneExperiment } from 'react-icons/ai';
 import {
   AuthUser,
   AppParams,
@@ -17,6 +18,7 @@ import AnalysisSection from './components/AnalysisSection';
 import LoginScreen from './components/LoginScreen';
 import HistoryView from './components/HistoryView';
 import PdfExportButton from './components/PdfExportButton';
+import ExperimentalView from './components/ExperimentalView';
 import { exportReportPdf } from './utils/pdfReport';
 
 const API = 'http://localhost:8000';
@@ -460,26 +462,41 @@ export default function App() {
           <span className="brand-sub">Optimizador de Parámetros de Filtros de Imagen</span>
         </div>
 
-        <div className="mode-tabs" role="tablist" aria-label="Modo de configuración">
-          {(['basic', 'advanced'] as ConfigMode[]).map((mode) => (
-            <button
-              key={mode}
-              type="button"
-              className="mode-tab"
-              role="tab"
-              aria-selected={configMode === mode}
-              disabled={appState === 'optimizing'}
-              onClick={() => handleConfigModeChange(mode)}>
-              {mode === 'basic' ? 'Básico' : 'Avanzado'}
-            </button>
-          ))}
+        <div className="mode-controls">
+          <div className="mode-tabs" role="tablist" aria-label="Modo de configuración">
+            {(['basic', 'advanced'] as ConfigMode[]).map((mode) => (
+              <button
+                key={mode}
+                type="button"
+                className="mode-tab"
+                role="tab"
+                aria-selected={view !== 'experimental' && configMode === mode}
+                disabled={appState === 'optimizing'}
+                onClick={() => {
+                  handleConfigModeChange(mode);
+                  setView('workspace');
+                }}>
+                {mode === 'basic' ? 'Básico' : 'Avanzado'}
+              </button>
+            ))}
+          </div>
+          <button
+            type="button"
+            className={`exp-toggle-btn${view === 'experimental' ? ' active' : ''}`}
+            onClick={() => setView((v) => (v === 'experimental' ? 'workspace' : 'experimental'))}
+            disabled={appState === 'optimizing'}
+            aria-pressed={view === 'experimental'}
+            aria-label="Modo experimental"
+            title="Modo experimental">
+            <AiTwotoneExperiment aria-hidden="true" />
+          </button>
         </div>
 
         <div className="header-actions">
           <button
             type="button"
             className={`history-inline-btn${view === 'history' ? ' active' : ''}`}
-            onClick={() => setView((v) => (v === 'workspace' ? 'history' : 'workspace'))}
+            onClick={() => setView((v) => (v === 'history' ? 'workspace' : 'history'))}
             disabled={appState === 'optimizing'}
             aria-pressed={view === 'history'}
             title="Historial de optimizaciones">
@@ -524,66 +541,78 @@ export default function App() {
       </header>
 
       <div className="app-body">
-        <Sidebar
-          params={params}
-          onChange={setParams}
-          onRun={handleRun}
-          onCancel={handleCancel}
-          canRun={!!originalImage && appState !== 'optimizing'}
-          appState={appState}
-          currentIteration={currentIteration}
-          mode={configMode}
-        />
+        {view === 'experimental' ?
+          <ExperimentalView apiBase={API} onAuthExpired={handleAuthExpired} />
+        : <>
+            <Sidebar
+              params={params}
+              onChange={setParams}
+              onRun={handleRun}
+              onCancel={handleCancel}
+              canRun={!!originalImage && appState !== 'optimizing'}
+              appState={appState}
+              currentIteration={currentIteration}
+              mode={configMode}
+            />
 
-        <main className="main">
-          {view === 'history' ?
-            <HistoryView apiBase={API} onLoadConfig={handleLoadConfig} onAuthExpired={handleAuthExpired} onBack={() => setView('workspace')} />
-          : <>
-              {error && <div className="err-banner">{error}</div>}
-
-              {result && (
-                <div className="workspace-pdf-bar">
-                  <PdfExportButton
-                    className="workspace-pdf-btn"
-                    onExport={() => exportReportPdf({
-                      filterType:   params.filterType,
-                      metricType:   params.metricType,
-                      noiseType:    params.noiseType,
-                      noiseSigma:   params.noiseSigma,
-                      noiseAmount:  params.noiseAmount,
-                      population:   params.population,
-                      iterations:   params.iterations,
-                      seed:         params.seed,
-                      params:       result.params,
-                      metrics:      result.metrics,
-                      convergence:  result.convergence,
-                      originalImage,
-                      noisyImage,
-                      resultImage,
-                    })}
-                  />
-                </div>
-              )}
-
-              <ImageWorkspace
-                appState={appState}
-                originalImage={originalImage}
-                noisyImage={noisyImage}
-                resultImage={resultImage}
-                onFileUpload={handleFileUpload}
-              />
-
-              {(convergence.length > 0 || result) && (
-                <AnalysisSection
-                  convergence={convergence}
-                  result={result}
-                  metricType={params.metricType}
-                  totalIterations={params.iterations}
+            <main className="main">
+              {view === 'history' ?
+                <HistoryView
+                  apiBase={API}
+                  onLoadConfig={handleLoadConfig}
+                  onAuthExpired={handleAuthExpired}
+                  onBack={() => setView('workspace')}
                 />
-              )}
-            </>
-          }
-        </main>
+              : <>
+                  {error && <div className="err-banner">{error}</div>}
+
+                  {result && (
+                    <div className="workspace-pdf-bar">
+                      <PdfExportButton
+                        className="workspace-pdf-btn"
+                        onExport={() =>
+                          exportReportPdf({
+                            filterType: params.filterType,
+                            metricType: params.metricType,
+                            noiseType: params.noiseType,
+                            noiseSigma: params.noiseSigma,
+                            noiseAmount: params.noiseAmount,
+                            population: params.population,
+                            iterations: params.iterations,
+                            seed: params.seed,
+                            params: result.params,
+                            metrics: result.metrics,
+                            convergence: result.convergence,
+                            originalImage,
+                            noisyImage,
+                            resultImage,
+                          })
+                        }
+                      />
+                    </div>
+                  )}
+
+                  <ImageWorkspace
+                    appState={appState}
+                    originalImage={originalImage}
+                    noisyImage={noisyImage}
+                    resultImage={resultImage}
+                    onFileUpload={handleFileUpload}
+                  />
+
+                  {(convergence.length > 0 || result) && (
+                    <AnalysisSection
+                      convergence={convergence}
+                      result={result}
+                      metricType={params.metricType}
+                      totalIterations={params.iterations}
+                    />
+                  )}
+                </>
+              }
+            </main>
+          </>
+        }
       </div>
     </div>
   );
