@@ -21,6 +21,35 @@ LOWER_BOUNDS = np.array([1.0,  3.0,  7.0])
 UPPER_BOUNDS = np.array([30.0, 11.0, 35.0])
 DIM = 3
 PARAM_NAMES = ["h (fuerza)", "templateWindowSize", "searchWindowSize"]
+PARAM_METADATA = [
+    {
+        "key": "h",
+        "display_name": "h · Filtering strength",
+        "scientific_name": "Filtering strength",
+        "symbol": "h",
+        "common_name": "h",
+        "aliases": ["denoising strength", "filter strength", "smoothing parameter"],
+        "description": "Parámetro de suavizado que controla la fuerza de filtrado de Non-Local Means.",
+    },
+    {
+        "key": "templateWindowSize",
+        "display_name": "Patch size · templateWindowSize",
+        "scientific_name": "Patch size",
+        "symbol": "T",
+        "common_name": "templateWindowSize",
+        "aliases": ["patch size", "template window", "patch comparison window"],
+        "description": "Tamaño del parche usado para comparar similitud entre regiones.",
+    },
+    {
+        "key": "searchWindowSize",
+        "display_name": "Search window size · searchWindowSize",
+        "scientific_name": "Search window size",
+        "symbol": "S",
+        "common_name": "searchWindowSize",
+        "aliases": ["search window", "search area", "non-local search window"],
+        "description": "Tamaño de la ventana donde se buscan parches similares.",
+    },
+]
 
 
 def _odd_int(val: float, min_val: int = 1) -> int:

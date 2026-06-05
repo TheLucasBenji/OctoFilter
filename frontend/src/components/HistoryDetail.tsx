@@ -83,6 +83,7 @@ export default function HistoryDetailView({ id, apiBase, onClose, onLoadConfig, 
       <AnalysisSection
         convergence={convergencePoints}
         result={fakeResult}
+        filterType={detail.filter_type}
         metricType={detail.metric_type}
         totalIterations={detail.iterations}
       />

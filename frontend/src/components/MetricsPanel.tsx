@@ -1,8 +1,10 @@
-import { OptimizationResult, MetricType } from '../types';
+import { FilterType, OptimizationResult, MetricType } from '../types';
 import { METRIC_HELP, TERM_HELP, getParamHelp } from '../helpTexts';
+import { getParamDescription, getParamDisplayName } from '../paramMetadata';
 import InfoHint from './InfoHint';
+import ParamLabel from './ParamLabel';
 
-interface Props { result: OptimizationResult; metricType: MetricType; }
+interface Props { result: OptimizationResult; filterType: FilterType; metricType: MetricType; }
 
 function delta(before: number, after: number, lowerBetter: boolean) {
   if (Math.abs(before) < 1e-10) return { label: '—', good: false };
@@ -49,7 +51,7 @@ function MetricTile({ label, value, unit, before, lowerBetter, help }: {
   );
 }
 
-export default function MetricsPanel({ result, metricType }: Props) {
+export default function MetricsPanel({ result, filterType, metricType }: Props) {
   const { metrics, params } = result;
 
   return (
@@ -92,13 +94,20 @@ export default function MetricsPanel({ result, metricType }: Props) {
             />
           </div>
           {Object.entries(params).map(([k, v]) => {
-            const help = getParamHelp(k);
+            const label = getParamDisplayName(filterType, k);
+            const help = getParamDescription(filterType, k) ?? getParamHelp(k);
             return (
               <div key={k} className="pt-row">
                 {help ? (
-                  <InfoHint label={k} description={help} icon={false} className="pt-key" />
+                  <InfoHint
+                    label={<ParamLabel filterType={filterType} name={k} />}
+                    description={help}
+                    icon={false}
+                    className="pt-key"
+                    ariaLabel={`${label}: ${help}`}
+                  />
                 ) : (
-                  <span className="pt-key">{k}</span>
+                  <span className="pt-key"><ParamLabel filterType={filterType} name={k} /></span>
                 )}
                 <span className="pt-val">{Number.isInteger(v) ? v : (v as number).toFixed(3)}</span>
               </div>

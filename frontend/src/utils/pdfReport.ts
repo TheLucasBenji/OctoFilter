@@ -1,5 +1,6 @@
 import { jsPDF } from 'jspdf';
 import { FilterType, HistoryDetail, MetricType, NoiseType, ResultMetrics } from '../types';
+import { getParamDisplayInfo } from '../paramMetadata';
 
 export const FILTER_LABELS: Record<FilterType, string> = {
   bilateral: 'Bilateral',
@@ -73,6 +74,24 @@ const IMAGE_ROW_GAP = 16;
 
 function imageDataUri(base64: string): string {
   return `data:image/png;base64,${base64}`;
+}
+
+function getPdfParamLabel(filterType: FilterType, name: string): string {
+  const info = getParamDisplayInfo(filterType, name);
+  const labels: Record<string, string> = {
+    d: 'Neighborhood diameter (d)',
+    sigmaColor: 'Range sigma (sigmaColor)',
+    sigmaSpace: 'Spatial sigma (sigmaSpace)',
+    niter: 'Diffusion iterations (niter)',
+    kappa: 'Gradient threshold (kappa)',
+    gamma: 'Diffusion rate / time step (gamma)',
+    option: 'Conduction function g(|grad I|)',
+    h: 'Filtering strength (h)',
+    templateWindowSize: 'Patch size (templateWindowSize)',
+    searchWindowSize: 'Search window size (searchWindowSize)',
+  };
+
+  return labels[info.key] ?? info.commonName ?? name;
 }
 
 export async function exportReportPdf(report: ReportData): Promise<void> {
@@ -237,13 +256,16 @@ export async function exportReportPdf(report: ReportData): Promise<void> {
   txt('MEJORES PARÁMETROS', ML, y, 8, false, T3);
   y += 11;
   const pe = Object.entries(report.params);
-  pe.forEach(([k, v], i) => {
-    const px = ML + (i % 3) * (CW / 3);
-    const py = y + Math.floor(i / 3) * 13;
+
+  pe.forEach(([k, v]) => {
+    const label = getPdfParamLabel(report.filterType, k);
     const vs = Math.abs(v - Math.round(v)) < 0.005 ? String(Math.round(v)) : v.toFixed(3);
-    txt(`${k}: ${vs}`, px, py, 8, false, T2);
+
+    ensureSpace(17);
+    txt(`${label}: ${vs}`, ML, y, 9, false, T1);
+    y += 14;
   });
-  y += Math.ceil(pe.length / 3) * 13 + 8;
+  y += 8;
   hline(y); y += 14;
 
   // ── 6. Convergence chart ───────────────────────────────────────────────

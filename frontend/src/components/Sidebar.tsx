@@ -1,22 +1,13 @@
 import { useEffect, useState } from 'react';
 import { FaRegCircleStop } from 'react-icons/fa6';
-import { AlgorithmType, AppParams, AppState, ConfigMode, FilterType, MetricType, NoiseType } from '../types';
+import { AlgorithmType, AppParams, AppState, ConfigMode, FilterInfo, FilterType, MetricType, NoiseType } from '../types';
 import { ALGORITHM_HELP, FILTER_HELP, METRIC_HELP, NOISE_HELP, TERM_HELP, getParamHelp } from '../helpTexts';
+import { getParamDescription, getParamDisplayName } from '../paramMetadata';
 import InfoHint from './InfoHint';
 import MetricSelector from './MetricSelector';
+import ParamLabel from './ParamLabel';
 
 const API = 'http://localhost:8000';
-
-interface FilterParam {
-  name: string;
-  lb: number;
-  ub: number;
-}
-interface FilterInfo {
-  label: string;
-  dim: number;
-  params: FilterParam[];
-}
 
 interface Props {
   params: AppParams;
@@ -411,11 +402,19 @@ export default function Sidebar({
               {curFilter && (
                 <div className="filter-params">
                   {curFilter.params.map((p) => {
-                    const help = getParamHelp(p.name);
+                    const label = getParamDisplayName(params.filterType, p.name, p);
+                    const help = getParamDescription(params.filterType, p.name, p) ?? getParamHelp(p.name);
                     return help ?
-                        <InfoHint key={p.name} label={p.name} description={help} icon={false} className="fp-chip" />
-                      : <span key={p.name} className="fp-chip">
-                          {p.name}
+                        <InfoHint
+                          key={p.key ?? p.name}
+                          label={<ParamLabel filterType={params.filterType} name={p.name} param={p} />}
+                          description={help}
+                          icon={false}
+                          className="fp-chip"
+                          ariaLabel={`${label}: ${help}`}
+                        />
+                      : <span key={p.key ?? p.name} className="fp-chip">
+                          <ParamLabel filterType={params.filterType} name={p.name} param={p} />
                         </span>;
                   })}
                 </div>

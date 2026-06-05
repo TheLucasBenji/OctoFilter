@@ -1138,9 +1138,14 @@ select:focus-visible {
 .filter-title {
   display: block;
   color: inherit;
-  white-space: nowrap;
+  line-height: 1.2;
+  white-space: normal;
   overflow: hidden;
-  text-overflow: ellipsis;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 .filter-desc {
@@ -1249,10 +1254,23 @@ select:focus-visible {
 .fp-chip {
   font-family: var(--mono);
   font-size: 10px;
+  line-height: 1.25;
   color: var(--t3);
   background: var(--raised);
   padding: 2px 6px;
   border-radius: 4px;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.fp-chip .info-hint-label-text,
+span.fp-chip {
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 .metric-btns {
@@ -1381,6 +1399,33 @@ select:focus-visible {
   align-items: center;
   gap: 5px;
   min-width: 0;
+  max-width: 100%;
+}
+
+.field-label-name .info-hint-label-text {
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.param-label-stack {
+  display: grid;
+  gap: 2px;
+  line-height: 1.2;
+}
+
+.param-label-stack > span:first-child {
+  color: var(--t2);
+}
+
+.param-label-stack > span:last-child {
+  font-family: var(--mono);
+  font-size: 9px;
+  color: var(--t3);
+  overflow-wrap: anywhere;
 }
 
 .field-label-val {
@@ -2185,13 +2230,14 @@ input[type='range']:disabled {
 /* Params tile */
 .params-tile {
   padding: 14px 16px;
-  min-width: 200px;
+  min-width: 280px;
 }
 
 .pt-row {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
+  gap: 12px;
   padding: 3px 0;
   border-bottom: 1px solid var(--line);
 }
@@ -2201,16 +2247,21 @@ input[type='range']:disabled {
 }
 
 .pt-key {
+  flex: 1 1 auto;
   font-family: var(--mono);
   font-size: 10px;
   color: var(--t3);
+  line-height: 1.3;
+  min-width: 0;
 }
 
 .pt-val {
+  flex: 0 0 auto;
   font-family: var(--mono);
   font-size: 10px;
   font-weight: 600;
   color: var(--a-hi);
+  text-align: right;
 }
 
 .mt-help-label,
@@ -2219,13 +2270,13 @@ input[type='range']:disabled {
 }
 
 .pt-key.info-hint {
-  max-width: min(150px, 62%);
+  max-width: none;
 }
 
 .pt-key .info-hint-label-text {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
 }
 
 /* ── Spinner ──────────────────────────────────────── */

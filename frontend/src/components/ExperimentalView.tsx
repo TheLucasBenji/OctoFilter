@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { FilterType } from '../types';
+import { FilterInfo, FilterParam, FilterType, ParamKind } from '../types';
 import { FILTER_HELP, getParamHelp } from '../helpTexts';
+import { getParamDescription, normalizeParamName } from '../paramMetadata';
 import InfoHint from './InfoHint';
+import ParamLabel, { getParamAccessibleLabel } from './ParamLabel';
 
 const FILTERS: { value: FilterType; label: string; short: string; desc: string }[] = [
   {
@@ -24,41 +26,13 @@ const FILTERS: { value: FilterType; label: string; short: string; desc: string }
   },
 ];
 
-interface FilterParam {
-  name: string;
-  lb: number;
-  ub: number;
-  manual_lb?: number;
-  manual_ub?: number;
-  kind?: ParamKind;
-  step?: number;
-  choices?: number[];
-}
-
-interface FilterInfo {
-  label: string;
-  dim: number;
-  params: FilterParam[];
-}
-
 interface Props {
   apiBase: string;
   onAuthExpired: () => void;
 }
 
-type ParamKind = 'float' | 'int' | 'odd-int' | 'choice';
-
 function buildDefaults(info: FilterInfo): number[] {
   return info.params.map(getDefaultParamValue);
-}
-
-function normalizeParamName(value: string) {
-  return value
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, ' ')
-    .trim();
 }
 
 function inferParamKind(name: string): ParamKind {
@@ -82,7 +56,7 @@ function inferParamKind(name: string): ParamKind {
 }
 
 function getParamKind(param: FilterParam): ParamKind {
-  return param.kind ?? inferParamKind(param.name);
+  return param.kind ?? inferParamKind(param.key ?? param.name);
 }
 
 function getManualLower(param: FilterParam): number {
@@ -165,8 +139,8 @@ function getParamRule(param: FilterParam): string {
   return 'acepta decimales';
 }
 
-function getExperimentalParamHelp(param: FilterParam): string {
-  const base = getParamHelp(param.name);
+function getExperimentalParamHelp(filterType: FilterType, param: FilterParam): string {
+  const base = getParamDescription(filterType, param.name, param) ?? getParamHelp(param.name);
   const min = formatBound(getManualLower(param));
   const max = formatBound(getManualUpper(param));
   const experimental = `Experimental: rango manual ${min} a ${max}; ${getParamRule(param)}.`;
@@ -174,7 +148,7 @@ function getExperimentalParamHelp(param: FilterParam): string {
 }
 
 function getChoiceLabel(param: FilterParam, choice: number): string {
-  const normalized = normalizeParamName(param.name);
+  const normalized = normalizeParamName(param.key ?? param.name);
   if (normalized === 'option' || normalized.startsWith('opcion')) {
     return choice === 1 ? '1 · exp' : '2 · rec';
   }
@@ -355,22 +329,28 @@ function ExperimentalSidebar({
           ) : (
             <div className="exp-params">
               {activeFilter.params.map((p, idx) => {
-                const help = getExperimentalParamHelp(p);
+                const label = getParamAccessibleLabel(filterType, p.name, p);
+                const help = getExperimentalParamHelp(filterType, p);
                 const value = activeParams[idx];
                 const kind = getParamKind(p);
                 const min = getManualLower(p);
                 const max = getManualUpper(p);
                 return (
-                  <div key={`${filterType}-${p.name}`} className="field">
+                  <div key={`${filterType}-${p.key ?? p.name}`} className="field">
                     <label className="field-label">
-                      <InfoHint label={p.name} description={help} className="field-label-name" />
+                      <InfoHint
+                        label={<ParamLabel filterType={filterType} name={p.name} param={p} />}
+                        description={help}
+                        className="field-label-name"
+                        ariaLabel={`${label}: ${help}`}
+                      />
                       <span className="field-label-val">{formatParamValue(value, p)}</span>
                     </label>
-                    {kind === 'choice' ? (
-                      <div className="exp-choice-row" role="group" aria-label={p.name}>
+                    {kind === 'choice' ?
+                      <div className="exp-choice-row" role="group" aria-label={label}>
                         {getChoices(p).map((choice) => (
                           <button
-                            key={`${p.name}-${choice}`}
+                            key={`${p.key ?? p.name}-${choice}`}
                             type="button"
                             className={`exp-choice-btn${Math.round(value) === choice ? ' active' : ''}`}
                             onClick={() => onParamChange(idx, choice, p)}
@@ -380,7 +360,7 @@ function ExperimentalSidebar({
                           </button>
                         ))}
                       </div>
-                    ) : (
+                    :
                       <div className="exp-param-control">
                         <input
                           type="number"
@@ -408,10 +388,10 @@ function ExperimentalSidebar({
                             onParamChange(idx, nextVal, p);
                           }}
                           disabled={busy}
-                          aria-label={`Ajustar ${p.name}`}
+                          aria-label={`Ajustar ${label}`}
                         />
                       </div>
-                    )}
+                    }
                     <div className="exp-param-range">
                       Rango manual {formatBound(min)} — {formatBound(max)} · {getParamRule(p)}
                     </div>

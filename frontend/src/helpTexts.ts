@@ -100,11 +100,29 @@ export function getParamHelp(name: string): string | undefined {
   if (normalized === 'd' || normalized.includes('diameter')) return PARAM_HELP.d;
   if (normalized.includes('sigmacolor') || normalized.includes('sigma color')) return PARAM_HELP.sigmaColor;
   if (normalized.includes('sigmaspace') || normalized.includes('sigma space')) return PARAM_HELP.sigmaSpace;
-  if (normalized === 'niter' || normalized === 'iteraciones') return PARAM_HELP.niter;
-  if (normalized === 'kappa') return PARAM_HELP.kappa;
-  if (normalized === 'gamma') return PARAM_HELP.gamma;
-  if (normalized.startsWith('opcion') || normalized === 'option') return PARAM_HELP.option;
-  if (normalized === 'h' || normalized.includes('fuerza')) return PARAM_HELP.h;
+  if (normalized === 'niter' || normalized === 'iteraciones' || normalized.includes('diffusion iterations')) {
+    return PARAM_HELP.niter;
+  }
+  if (
+    normalized === 'kappa' ||
+    normalized.includes('conductance threshold') ||
+    normalized.includes('gradient threshold')
+  ) {
+    return PARAM_HELP.kappa;
+  }
+  if (
+    normalized === 'gamma' ||
+    normalized.includes('diffusion time step') ||
+    normalized.includes('diffusion rate')
+  ) {
+    return PARAM_HELP.gamma;
+  }
+  if (normalized.startsWith('opcion') || normalized === 'option' || normalized.includes('conduction function')) {
+    return PARAM_HELP.option;
+  }
+  if (normalized === 'h' || normalized.includes('fuerza') || normalized.includes('filtering strength')) {
+    return PARAM_HELP.h;
+  }
   if (normalized.includes('templatewindowsize') || normalized.includes('template')) {
     return PARAM_HELP.templateWindowSize;
   }
