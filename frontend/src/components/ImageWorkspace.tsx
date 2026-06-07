@@ -139,13 +139,15 @@ export default function ImageWorkspace({ appState, originalImage, noisyImage, re
         ) : (
           <div className="result-empty">
             <div className="result-empty-glyph">
-              {appState === 'optimizing' ? '⚙' : '□'}
+              {appState === 'optimizing' ?
+                <span className="spinner result-empty-spinner" />
+              : '□'}
             </div>
             <div className="result-empty-text">
               {appState === 'idle' || appState === 'previewing'
                 ? 'Configura y ejecuta la optimización'
                 : appState === 'optimizing'
-                  ? 'Optimizando...'
+                  ? 'Preparando optimización...'
                   : ''}
             </div>
           </div>

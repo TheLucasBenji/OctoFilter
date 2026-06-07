@@ -3,6 +3,7 @@ import { METRIC_HELP, TERM_HELP } from '../helpTexts';
 import ConvergenceChart from './ConvergenceChart';
 import InfoHint from './InfoHint';
 import MetricsPanel from './MetricsPanel';
+import { formatDuration } from '../utils/optimizationProgress';
 
 interface Props {
   convergence: ConvergencePoint[];
@@ -13,6 +14,8 @@ interface Props {
 }
 
 export default function AnalysisSection({ convergence, result, filterType, metricType, totalIterations }: Props) {
+  const durationLabel = result?.elapsed_ms != null ? formatDuration(result.elapsed_ms) : null;
+
   return (
     <div className="analysis">
       <div className="chart-section">
@@ -26,7 +29,10 @@ export default function AnalysisSection({ convergence, result, filterType, metri
               ariaLabel={`Convergencia ${metricType.toUpperCase()}: ${TERM_HELP.convergence} ${METRIC_HELP[metricType]}`}
             />
           </span>
-          <span className="section-meta">{convergence.length} / {totalIterations} iter</span>
+          <span className="section-meta">
+            <span>{convergence.length} / {totalIterations} iter</span>
+            {durationLabel && <span className="section-meta-chip">Tiempo total {durationLabel}</span>}
+          </span>
         </div>
         {convergence.length > 0 ? (
           <ConvergenceChart data={convergence} metricType={metricType} totalIterations={totalIterations} />

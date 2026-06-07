@@ -191,6 +191,132 @@ def _coerce_manual_params(filter_type: str, params_arr: np.ndarray) -> np.ndarra
     )
 
 
+def _validate_optimization_inputs(
+    filter_type: str,
+    metric: str,
+    noise_type: str,
+    noise_sigma: float,
+    noise_amount: float,
+    population: int,
+    iterations: int,
+    algorithm: str,
+) -> None:
+    if filter_type not in FILTER_MODULES:
+        raise HTTPException(400, f"filter_type inválido: '{filter_type}'")
+    if metric not in {"mse", "snr", "piqe"}:
+        raise HTTPException(400, f"metric inválido: '{metric}'")
+    if noise_type not in {"gaussian", "sp"}:
+        raise HTTPException(400, f"noise_type inválido: '{noise_type}'")
+    if not (9 <= population <= 200):
+        raise HTTPException(400, "population debe estar entre 9 y 200")
+    if not (1 <= iterations <= 500):
+        raise HTTPException(400, "iterations debe estar entre 1 y 500")
+    if noise_sigma < 0:
+        raise HTTPException(400, "noise_sigma debe ser >= 0")
+    if not (0.0 <= noise_amount <= 1.0):
+        raise HTTPException(400, "noise_amount debe estar entre 0 y 1")
+    if algorithm not in ALGORITHMS:
+        raise HTTPException(400, f"algorithm inválido: '{algorithm}'")
+
+
+def _make_noisy_image(
+    original: np.ndarray,
+    noise_type: str,
+    noise_sigma: float,
+    noise_amount: float,
+    seed: Optional[int],
+) -> np.ndarray:
+    rng_noise = np.random.default_rng(seed)
+    if noise_type == "gaussian":
+        return img_noise.add_gaussian_noise(original, sigma=noise_sigma, rng=rng_noise)
+    return img_noise.add_salt_and_pepper_noise(original, amount=noise_amount, rng=rng_noise)
+
+
+def _build_optimization_context(
+    original: np.ndarray,
+    noisy: np.ndarray,
+    filter_type: str,
+    metric: str,
+    cancelled: Optional[threading.Event] = None,
+):
+    fmod = FILTER_MODULES[filter_type]
+
+    lb = fmod.LOWER_BOUNDS.copy()
+    ub = fmod.UPPER_BOUNDS.copy()
+
+    noise_estimate = float(np.std(noisy.astype(np.float32) - original.astype(np.float32)))
+
+    if filter_type == "bilateral":
+        lb[1] = max(10.0, noise_estimate * 0.5)
+        ub[1] = min(200.0, noise_estimate * 3.0)
+        lb[2] = max(10.0, noise_estimate * 0.5)
+        ub[2] = min(200.0, noise_estimate * 3.0)
+    elif filter_type == "anisotropic":
+        lb[1] = max(10.0, noise_estimate * 0.5)
+        ub[1] = min(100.0, noise_estimate * 3.0)
+
+    noisy_f32 = noisy.astype(np.float32)
+    original_f32 = original.astype(np.float32)
+
+    def check_cancelled():
+        if cancelled is not None and cancelled.is_set():
+            raise OptimizationCancelled()
+
+    def objective(params: np.ndarray) -> float:
+        check_cancelled()
+        filtered = fmod.apply(noisy_f32, params)
+        check_cancelled()
+        if metric == "mse":
+            return img_metrics.mse(original_f32, filtered)
+        elif metric == "snr":
+            return -img_metrics.snr(original_f32, filtered)
+        elif metric == "piqe":
+            u8 = np.clip(filtered, 0, 255).astype(np.uint8)
+            return img_metrics.piqe(u8)
+        return img_metrics.mse(original_f32, filtered)
+
+    return fmod, lb, ub, noisy_f32, original_f32, objective
+
+APPROX_PROGRESS_INITIALIZING = 0.06
+APPROX_PROGRESS_ITERATING_WEIGHT = 0.89
+APPROX_PROGRESS_FINALIZING = 0.95
+
+
+def _resolve_progress_phase(algorithm: str, iteration: int) -> str:
+    if algorithm == "ooa" and iteration == 0:
+        return "initializing"
+    return "iterating"
+
+
+def _completed_loop_iterations(algorithm: str, iteration: int, phase: str, max_iter: int) -> int:
+    if phase == "initializing":
+        return 0
+    if phase == "finalizing":
+        return max_iter
+    if algorithm == "sfoa":
+        return min(iteration + 1, max_iter)
+    return max(iteration, 0)
+
+
+def _remaining_iterations(algorithm: str, iteration: int, phase: str, max_iter: int) -> int:
+    if phase == "finalizing":
+        return 0
+    if phase == "initializing":
+        return max_iter - 1
+    return max(0, max_iter - 1 - iteration)
+
+
+def _approx_progress_fraction(algorithm: str, iteration: int, max_iter: int, phase: str) -> float:
+    # Phase-based UI estimate, not an exact measure of objective evaluations.
+    if phase == "finalizing":
+        return APPROX_PROGRESS_FINALIZING
+    if phase == "initializing":
+        return APPROX_PROGRESS_INITIALIZING
+    completed = _completed_loop_iterations(algorithm, iteration, phase, max_iter)
+    ratio = completed / max(max_iter, 1)
+    return APPROX_PROGRESS_INITIALIZING + APPROX_PROGRESS_ITERATING_WEIGHT * ratio
+
+
 @app.post("/api/auth/login")
 def login(payload: LoginRequest, response: Response):
     user = authenticate_user(payload.email, payload.password)
@@ -236,48 +362,32 @@ def run_optimization(
     noisy_bytes: bytes,
 ):
     try:
-        fmod = FILTER_MODULES[filter_type]
         rng = np.random.default_rng(seed)
-
-        lb = fmod.LOWER_BOUNDS.copy()
-        ub = fmod.UPPER_BOUNDS.copy()
-
-        noise_estimate = float(np.std(noisy.astype(np.float32) - original.astype(np.float32)))
-
-        if filter_type == "bilateral":
-            lb[1] = max(10.0, noise_estimate * 0.5)
-            ub[1] = min(200.0, noise_estimate * 3.0)
-            lb[2] = max(10.0, noise_estimate * 0.5)
-            ub[2] = min(200.0, noise_estimate * 3.0)
-        elif filter_type == "anisotropic":
-            lb[1] = max(10.0, noise_estimate * 0.5)
-            ub[1] = min(100.0, noise_estimate * 3.0)
-
-        noisy_f32 = noisy.astype(np.float32)
-        original_f32 = original.astype(np.float32)
-
-        def check_cancelled():
-            if cancelled.is_set():
-                raise OptimizationCancelled()
-
-        def objective(params: np.ndarray) -> float:
-            check_cancelled()
-            filtered = fmod.apply(noisy_f32, params)
-            check_cancelled()
-            if metric == "mse":
-                return img_metrics.mse(original_f32, filtered)
-            elif metric == "snr":
-                return -img_metrics.snr(original_f32, filtered)
-            elif metric == "piqe":
-                u8 = np.clip(filtered, 0, 255).astype(np.uint8)
-                return img_metrics.piqe(u8)
-            return img_metrics.mse(original_f32, filtered)
+        fmod, lb, ub, noisy_f32, original_f32, objective = _build_optimization_context(
+            original,
+            noisy,
+            filter_type,
+            metric,
+            cancelled,
+        )
 
         def on_iter(iteration: int, best_cost: float, _best_pos: np.ndarray):
-            check_cancelled()
+            if cancelled.is_set():
+                raise OptimizationCancelled()
+            phase = _resolve_progress_phase(algorithm, iteration)
+            completed_iterations = min(
+                _completed_loop_iterations(algorithm, iteration, phase, iterations),
+                iterations,
+            )
             q.put_nowait({
                 "type": "progress",
+                "phase": phase,
                 "iteration": iteration,
+                "completed_iterations": completed_iterations,
+                "total_iterations": iterations,
+                "remaining_iterations": _remaining_iterations(algorithm, iteration, phase, iterations),
+                "progress_fraction": _approx_progress_fraction(algorithm, iteration, iterations, phase),
+                "elapsed_ms": int((time.monotonic() - started_at) * 1000),
                 "cost": float(best_cost),
             })
 
@@ -293,7 +403,20 @@ def run_optimization(
             rng=rng,
         )
 
-        check_cancelled()
+        if cancelled.is_set():
+            raise OptimizationCancelled()
+
+        q.put_nowait({
+            "type": "progress",
+            "phase": "finalizing",
+            "iteration": iterations - 1,
+            "completed_iterations": iterations,
+            "total_iterations": iterations,
+            "remaining_iterations": _remaining_iterations(algorithm, iterations - 1, "finalizing", iterations),
+            "progress_fraction": _approx_progress_fraction(algorithm, iterations - 1, iterations, "finalizing"),
+            "elapsed_ms": int((time.monotonic() - started_at) * 1000),
+        })
+
         result = fmod.apply(noisy_f32, best_pos)
         result_u8 = np.clip(result, 0, 255).astype(np.uint8)
 
@@ -337,7 +460,7 @@ def run_optimization(
                     "noisy": noisy_bytes,
                     "result": result_buf.tobytes(),
                 },
-                duration_ms=int((time.time() - started_at) * 1000),
+                duration_ms=int((time.monotonic() - started_at) * 1000),
             )
         except Exception:
             import traceback as _tb
@@ -349,6 +472,7 @@ def run_optimization(
             "convergence": complete_convergence,
             "metrics": complete_metrics,
             "params": complete_params,
+            "elapsed_ms": int((time.monotonic() - started_at) * 1000),
         })
     except OptimizationCancelled:
         q.put_nowait({"type": "cancelled"})
@@ -476,28 +600,18 @@ async def start_optimize(
     if original is None:
         raise HTTPException(400, "Invalid image")
 
-    if filter_type not in FILTER_MODULES:
-        raise HTTPException(400, f"filter_type inválido: '{filter_type}'")
-    if metric not in {"mse", "snr", "piqe"}:
-        raise HTTPException(400, f"metric inválido: '{metric}'")
-    if noise_type not in {"gaussian", "sp"}:
-        raise HTTPException(400, f"noise_type inválido: '{noise_type}'")
-    if not (9 <= population <= 200):
-        raise HTTPException(400, "population debe estar entre 9 y 200")
-    if not (1 <= iterations <= 500):
-        raise HTTPException(400, "iterations debe estar entre 1 y 500")
-    if noise_sigma < 0:
-        raise HTTPException(400, "noise_sigma debe ser >= 0")
-    if not (0.0 <= noise_amount <= 1.0):
-        raise HTTPException(400, "noise_amount debe estar entre 0 y 1")
-    if algorithm not in ALGORITHMS:
-        raise HTTPException(400, f"algorithm inválido: '{algorithm}'")
+    _validate_optimization_inputs(
+        filter_type,
+        metric,
+        noise_type,
+        noise_sigma,
+        noise_amount,
+        population,
+        iterations,
+        algorithm,
+    )
 
-    rng_noise = np.random.default_rng(seed)
-    if noise_type == "gaussian":
-        noisy = img_noise.add_gaussian_noise(original, sigma=noise_sigma, rng=rng_noise)
-    else:
-        noisy = img_noise.add_salt_and_pepper_noise(original, amount=noise_amount, rng=rng_noise)
+    noisy = _make_noisy_image(original, noise_type, noise_sigma, noise_amount, seed)
 
     _, orig_buf = cv2.imencode(".png", original)
     _, noisy_buf = cv2.imencode(".png", noisy)
@@ -528,7 +642,7 @@ async def start_optimize(
         args=(
             job_id, original, noisy, filter_type, metric, algorithm, population, iterations, seed,
             q, cancelled,
-            _user["id"], time.time(), params_req, original_bytes, noisy_bytes,
+            _user["id"], time.monotonic(), params_req, original_bytes, noisy_bytes,
         ),
         daemon=True,
     )

@@ -16,7 +16,6 @@ interface Props {
   onCancel: () => void;
   canRun: boolean;
   appState: AppState;
-  currentIteration: number;
   mode: ConfigMode;
 }
 
@@ -56,23 +55,16 @@ function RunBlock({
   locked,
   canRun,
   appState,
-  currentIteration,
-  iterations,
   onRun,
   onCancel,
 }: {
   locked: boolean;
   canRun: boolean;
   appState: AppState;
-  currentIteration: number;
-  iterations: number;
   onRun: () => void;
   onCancel: () => void;
 }) {
-  const pct =
-    appState === 'optimizing' ? Math.round((currentIteration / (iterations || 1)) * 100)
-    : appState === 'complete' ? 100
-    : 0;
+  const optimizing = appState === 'optimizing';
 
   return (
     <div className="sb-group sb-run">
@@ -80,7 +72,7 @@ function RunBlock({
         <div className="run-busy">
           <span className="run-busy-label">
             <span className="spinner" />
-            Optimizando...
+            {optimizing ? 'Optimizando...' : 'Preparando...'}
           </span>
           <button
             type="button"
@@ -96,14 +88,14 @@ function RunBlock({
         </button>
       }
 
-      {(locked || appState === 'complete') && (
+      {appState === 'complete' && (
         <div className="progress-wrap">
           <div className="progress-track">
-            <div className="progress-fill" style={{ width: `${pct}%` }} />
+            <div className="progress-fill" style={{ width: '100%' }} />
           </div>
           <div className="progress-meta">
-            <span>{locked ? `iter ${currentIteration} / ${iterations}` : 'completo'}</span>
-            <span>{pct}%</span>
+            <span>completo</span>
+            <span>100%</span>
           </div>
         </div>
       )}
@@ -118,7 +110,6 @@ export default function Sidebar({
   onCancel,
   canRun,
   appState,
-  currentIteration,
   mode,
 }: Props) {
   const [filterInfo, setFilterInfo] = useState<Record<string, FilterInfo>>({});
@@ -443,8 +434,6 @@ export default function Sidebar({
         locked={locked}
         canRun={canRun}
         appState={appState}
-        currentIteration={currentIteration}
-        iterations={params.iterations}
         onRun={onRun}
         onCancel={onCancel}
       />

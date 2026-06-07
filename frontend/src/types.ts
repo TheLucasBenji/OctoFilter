@@ -63,10 +63,24 @@ export interface OptimizationResult {
   convergence: number[];
   metrics: ResultMetrics;
   params: Record<string, number>;
+  elapsed_ms?: number;
 }
 
 export type AppState = 'idle' | 'previewing' | 'optimizing' | 'complete' | 'error';
 export type AppView = 'workspace' | 'history' | 'experimental';
+export type OptimizationPhase = 'initializing' | 'iterating' | 'finalizing';
+
+export interface OptimizationProgressEvent {
+  type: 'progress';
+  phase: OptimizationPhase;
+  iteration: number;
+  completed_iterations: number;
+  total_iterations: number;
+  remaining_iterations: number;
+  progress_fraction: number;
+  elapsed_ms: number;
+  cost?: number;
+}
 
 export interface ConvergencePoint {
   iteration: number;

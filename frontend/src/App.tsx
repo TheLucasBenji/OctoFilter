@@ -11,6 +11,8 @@ import {
   ConfigMode,
   ThemePreference,
   HistoryDetail,
+  OptimizationPhase,
+  OptimizationProgressEvent,
 } from './types';
 import Sidebar from './components/Sidebar';
 import ImageWorkspace from './components/ImageWorkspace';
@@ -19,7 +21,9 @@ import LoginScreen from './components/LoginScreen';
 import HistoryView from './components/HistoryView';
 import PdfExportButton from './components/PdfExportButton';
 import ExperimentalView from './components/ExperimentalView';
+import OptimizationLoadingPanel from './components/OptimizationLoadingPanel';
 import { exportReportPdf } from './utils/pdfReport';
+import { createEtaTracker, ETA_COUNTDOWN_FLOOR_MS } from './utils/optimizationProgress';
 
 const API = 'http://localhost:8000';
 const octopusLogo = new URL('./public/octopus.svg', import.meta.url).href;
@@ -38,6 +42,15 @@ const DEFAULT_PARAMS: AppParams = {
 
 const THEME_STORAGE_KEY = 'octopus-theme';
 type AuthStatus = 'checking' | 'authenticated' | 'anonymous';
+
+function hybridElapsedMs(serverElapsedMs: number, runStartedAt: number): number {
+  const clientElapsedMs = Math.round(performance.now() - runStartedAt);
+  return Math.max(serverElapsedMs, clientElapsedMs);
+}
+
+function isProgressEvent(ev: { type?: string }): ev is OptimizationProgressEvent {
+  return ev.type === 'progress';
+}
 
 function getInitialTheme(): ThemePreference {
   if (typeof window === 'undefined') return 'dark';
@@ -65,6 +78,21 @@ function ThemeIcon({ theme }: { theme: ThemePreference }) {
   );
 }
 
+function buildOptimizationFormData(file: File, params: AppParams): FormData {
+  const fd = new FormData();
+  fd.append('image', file);
+  fd.append('filter_type', params.filterType);
+  fd.append('metric', params.metricType);
+  fd.append('noise_type', params.noiseType);
+  fd.append('noise_sigma', params.noiseSigma.toString());
+  fd.append('noise_amount', params.noiseAmount.toString());
+  fd.append('population', params.population.toString());
+  fd.append('iterations', params.iterations.toString());
+  if (params.seed) fd.append('seed', params.seed);
+  fd.append('algorithm', params.algorithm);
+  return fd;
+}
+
 export default function App() {
   const [authStatus, setAuthStatus] = useState<AuthStatus>('checking');
   const [authUser, setAuthUser] = useState<AuthUser | null>(null);
@@ -78,6 +106,11 @@ export default function App() {
   const [resultImage, setResultImage] = useState<string | null>(null);
   const [convergence, setConvergence] = useState<ConvergencePoint[]>([]);
   const [currentIteration, setCurrentIteration] = useState(0);
+  const [remainingMs, setRemainingMs] = useState<number | null>(null);
+  const [etaSampleCount, setEtaSampleCount] = useState(0);
+  const [elapsedMs, setElapsedMs] = useState(0);
+  const [optimizationPhase, setOptimizationPhase] = useState<OptimizationPhase | null>(null);
+  const [progressFraction, setProgressFraction] = useState(0);
   const [result, setResult] = useState<OptimizationResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [activeJobId, setActiveJobId] = useState<string | null>(null);
@@ -86,6 +119,25 @@ export default function App() {
   const evsRef = useRef<EventSource | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const cancelRequestedRef = useRef(false);
+  const etaTrackerRef = useRef(createEtaTracker());
+  const runStartedAtRef = useRef(0);
+  const clockAlignedRef = useRef(false);
+  const remainingAnchorMsRef = useRef<number | null>(null);
+  const remainingAnchorAtRef = useRef(0);
+  const busy = appState === 'optimizing';
+
+  const clearRemainingAnchor = useCallback(() => {
+    remainingAnchorMsRef.current = null;
+  }, []);
+
+  const anchorRemaining = useCallback((ms: number | null) => {
+    if (ms == null) {
+      clearRemainingAnchor();
+      return;
+    }
+    remainingAnchorMsRef.current = ms;
+    remainingAnchorAtRef.current = performance.now();
+  }, [clearRemainingAnchor]);
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -95,6 +147,28 @@ export default function App() {
   useEffect(() => {
     document.documentElement.dataset.algorithm = params.algorithm;
   }, [params.algorithm]);
+
+  useEffect(() => {
+    if (appState !== 'optimizing') return;
+
+    const tick = () => {
+      setElapsedMs(Math.round(performance.now() - runStartedAtRef.current));
+      if (remainingAnchorMsRef.current != null) {
+        // Mientras seguimos iterando no dejamos que el countdown interpolado caiga a 0: si la
+        // estimacion se quedo corta, mostrar 0 y luego "rebotar" al llegar el siguiente evento se
+        // ve mal. Lo mantenemos en un piso pequeno; el 0 real lo marca el evento de finalizacion.
+        const floorMs = optimizationPhase === 'finalizing' ? 0 : ETA_COUNTDOWN_FLOOR_MS;
+        setRemainingMs(Math.max(
+          floorMs,
+          remainingAnchorMsRef.current - (performance.now() - remainingAnchorAtRef.current),
+        ));
+      }
+    };
+
+    tick();
+    const id = window.setInterval(tick, 250);
+    return () => window.clearInterval(id);
+  }, [appState, optimizationPhase]);
 
   const toggleTheme = useCallback(() => {
     setTheme((prev) => {
@@ -107,6 +181,10 @@ export default function App() {
   const clearWorkspace = useCallback(() => {
     fileRef.current = null;
     evsRef.current?.close();
+    etaTrackerRef.current.reset();
+    clearRemainingAnchor();
+    runStartedAtRef.current = 0;
+    clockAlignedRef.current = false;
     cancelRequestedRef.current = false;
     setAppState('idle');
     setOriginalImage(null);
@@ -114,10 +192,15 @@ export default function App() {
     setResultImage(null);
     setConvergence([]);
     setCurrentIteration(0);
+    setRemainingMs(null);
+    setEtaSampleCount(0);
+    setElapsedMs(0);
+    setOptimizationPhase(null);
+    setProgressFraction(0);
     setResult(null);
     setError(null);
     setActiveJobId(null);
-  }, []);
+  }, [clearRemainingAnchor]);
 
   const handleAuthExpired = useCallback(() => {
     clearWorkspace();
@@ -222,6 +305,11 @@ export default function App() {
       setResult(null);
       setResultImage(null);
       setConvergence([]);
+      setCurrentIteration(0);
+      setRemainingMs(null);
+      setElapsedMs(0);
+      setOptimizationPhase(null);
+      setProgressFraction(0);
       setError(null);
       await previewNoise(file, params);
     },
@@ -238,36 +326,34 @@ export default function App() {
   }, [params.noiseType, params.noiseSigma, params.noiseAmount, params.seed, appState, previewNoise]);
 
   const handleRun = useCallback(async () => {
-    if (!fileRef.current) return;
+    const file = fileRef.current;
+    if (!file) return;
     evsRef.current?.close();
+    etaTrackerRef.current.reset();
+    clearRemainingAnchor();
+    runStartedAtRef.current = performance.now();
+    clockAlignedRef.current = false;
     cancelRequestedRef.current = false;
 
     setAppState('optimizing');
     setActiveJobId(null);
     setConvergence([]);
     setCurrentIteration(0);
+    setRemainingMs(null);
+    setEtaSampleCount(0);
+    setElapsedMs(0);
+    setOptimizationPhase(null);
+    setProgressFraction(0);
     setResult(null);
     setResultImage(null);
     setError(null);
-
-    const fd = new FormData();
-    fd.append('image', fileRef.current);
-    fd.append('filter_type', params.filterType);
-    fd.append('metric', params.metricType);
-    fd.append('noise_type', params.noiseType);
-    fd.append('noise_sigma', params.noiseSigma.toString());
-    fd.append('noise_amount', params.noiseAmount.toString());
-    fd.append('population', params.population.toString());
-    fd.append('iterations', params.iterations.toString());
-    if (params.seed) fd.append('seed', params.seed);
-    fd.append('algorithm', params.algorithm);
 
     let jobId: string;
     try {
       const r = await fetch(`${API}/api/optimize`, {
         method: 'POST',
         credentials: 'include',
-        body: fd,
+        body: buildOptimizationFormData(file, params),
       });
       if (r.status === 401) {
         handleAuthExpired();
@@ -283,7 +369,10 @@ export default function App() {
       setOriginalImage(d.original_image);
       setNoisyImage(d.noisy_image);
     } catch (e) {
-      setError(String(e));
+      etaTrackerRef.current.reset();
+      clearRemainingAnchor();
+      setEtaSampleCount(0);
+      setError(e instanceof Error ? e.message : String(e));
       setAppState('error');
       return;
     }
@@ -301,13 +390,50 @@ export default function App() {
         console.warn('SSE: frame no-JSON ignorado', e.data);
         return;
       }
-      if (ev.type === 'progress') {
-        setCurrentIteration(ev.iteration);
-        setConvergence((prev) => [...prev, { iteration: ev.iteration, cost: ev.cost }]);
+      if (isProgressEvent(ev)) {
+        const { completed_iterations: completed, total_iterations: total } = ev;
+        const serverElapsed = ev.elapsed_ms;
+        if (!clockAlignedRef.current && serverElapsed > 0) {
+          runStartedAtRef.current = performance.now() - serverElapsed;
+          clockAlignedRef.current = true;
+        }
+        const elapsed = hybridElapsedMs(serverElapsed, runStartedAtRef.current);
+        const phase = ev.phase;
+
+        const nextRemaining = etaTrackerRef.current.update({
+          elapsedMs: elapsed,
+          completedIterations: completed,
+          remainingIterations: ev.remaining_iterations,
+          totalIterations: total,
+          phase,
+        });
+
+        setCurrentIteration(completed);
+        setOptimizationPhase(phase);
+        setProgressFraction(ev.progress_fraction);
+        setElapsedMs(elapsed);
+        setEtaSampleCount(etaTrackerRef.current.sampleCount);
+        setRemainingMs(nextRemaining);
+        anchorRemaining(nextRemaining);
+
+        if (typeof ev.cost === 'number') {
+          const cost = ev.cost;
+          setConvergence((prev) => [...prev, { iteration: ev.iteration + 1, cost }]);
+        }
       } else if (ev.type === 'complete') {
         setResultImage(ev.result_image);
         setResult(ev as OptimizationResult);
         setConvergence(ev.convergence.map((c: number, i: number) => ({ iteration: i + 1, cost: c })));
+        setCurrentIteration(params.iterations);
+        setRemainingMs(0);
+        setEtaSampleCount(0);
+        setProgressFraction(1);
+        setOptimizationPhase(null);
+        etaTrackerRef.current.reset();
+        clearRemainingAnchor();
+        if (typeof ev.elapsed_ms === 'number') {
+          setElapsedMs(hybridElapsedMs(ev.elapsed_ms, runStartedAtRef.current));
+        }
         setAppState('complete');
         setActiveJobId(null);
         cancelRequestedRef.current = false;
@@ -316,6 +442,9 @@ export default function App() {
         setError(ev.message);
         setAppState('error');
         setActiveJobId(null);
+        etaTrackerRef.current.reset();
+        clearRemainingAnchor();
+        setEtaSampleCount(0);
         cancelRequestedRef.current = false;
         evs.close();
       } else if (ev.type === 'cancelled') {
@@ -326,6 +455,13 @@ export default function App() {
         setResultImage(null);
         setError(null);
         setActiveJobId(null);
+        etaTrackerRef.current.reset();
+        clearRemainingAnchor();
+        setRemainingMs(null);
+        setEtaSampleCount(0);
+        setElapsedMs(0);
+        setOptimizationPhase(null);
+        setProgressFraction(0);
         cancelRequestedRef.current = false;
         evs.close();
       }
@@ -335,15 +471,25 @@ export default function App() {
       if (cancelRequestedRef.current) {
         setAppState(fileRef.current ? 'previewing' : 'idle');
         setActiveJobId(null);
+        etaTrackerRef.current.reset();
+        clearRemainingAnchor();
+        setRemainingMs(null);
+        setEtaSampleCount(0);
+        setElapsedMs(0);
+        setOptimizationPhase(null);
+        setProgressFraction(0);
         cancelRequestedRef.current = false;
       } else {
         setError('Backend connection lost.');
         setAppState('error');
         setActiveJobId(null);
+        etaTrackerRef.current.reset();
+        clearRemainingAnchor();
+        setEtaSampleCount(0);
       }
       evs.close();
     };
-  }, [handleAuthExpired, params]);
+  }, [anchorRemaining, clearRemainingAnchor, handleAuthExpired, params]);
 
   const handleCancel = useCallback(async () => {
     if (!activeJobId || appState !== 'optimizing') return;
@@ -365,10 +511,17 @@ export default function App() {
       cancelRequestedRef.current = false;
       evsRef.current?.close();
       setActiveJobId(null);
+      etaTrackerRef.current.reset();
+      clearRemainingAnchor();
+      setRemainingMs(null);
+      setEtaSampleCount(0);
+      setElapsedMs(0);
+      setOptimizationPhase(null);
+      setProgressFraction(0);
       setError(e instanceof Error ? e.message : String(e));
       setAppState('error');
     }
-  }, [activeJobId, appState, handleAuthExpired]);
+  }, [activeJobId, appState, clearRemainingAnchor, handleAuthExpired]);
 
   const handleLogout = useCallback(async () => {
     const jobToCancel = activeJobId && appState === 'optimizing' ? activeJobId : null;
@@ -471,7 +624,7 @@ export default function App() {
                 className="mode-tab"
                 role="tab"
                 aria-selected={view !== 'experimental' && configMode === mode}
-                disabled={appState === 'optimizing'}
+                disabled={busy}
                 onClick={() => {
                   handleConfigModeChange(mode);
                   setView('workspace');
@@ -484,7 +637,7 @@ export default function App() {
             type="button"
             className={`exp-toggle-btn${view === 'experimental' ? ' active' : ''}`}
             onClick={() => setView((v) => (v === 'experimental' ? 'workspace' : 'experimental'))}
-            disabled={appState === 'optimizing'}
+            disabled={busy}
             aria-pressed={view === 'experimental'}
             aria-label="Modo experimental"
             title="Modo experimental">
@@ -497,7 +650,7 @@ export default function App() {
             type="button"
             className={`history-inline-btn${view === 'history' ? ' active' : ''}`}
             onClick={() => setView((v) => (v === 'history' ? 'workspace' : 'history'))}
-            disabled={appState === 'optimizing'}
+            disabled={busy}
             aria-pressed={view === 'history'}
             title="Historial de optimizaciones">
             {view === 'history' && <span className="history-close">✕</span>}
@@ -549,9 +702,8 @@ export default function App() {
               onChange={setParams}
               onRun={handleRun}
               onCancel={handleCancel}
-              canRun={!!originalImage && appState !== 'optimizing'}
+              canRun={!!originalImage && !busy}
               appState={appState}
-              currentIteration={currentIteration}
               mode={configMode}
             />
 
@@ -574,6 +726,7 @@ export default function App() {
                           exportReportPdf({
                             filterType: params.filterType,
                             metricType: params.metricType,
+                            durationMs: result.elapsed_ms,
                             noiseType: params.noiseType,
                             noiseSigma: params.noiseSigma,
                             noiseAmount: params.noiseAmount,
@@ -590,6 +743,21 @@ export default function App() {
                         }
                       />
                     </div>
+                  )}
+
+                  {busy && (
+                    <OptimizationLoadingPanel
+                      appState={appState}
+                      algorithm={params.algorithm}
+                      phase={optimizationPhase}
+                      progressFraction={progressFraction}
+                      remainingMs={remainingMs}
+                      elapsedMs={elapsedMs}
+                      completedIterations={currentIteration}
+                      totalIterations={params.iterations}
+                      etaSampleCount={etaSampleCount}
+                      onCancel={handleCancel}
+                    />
                   )}
 
                   <ImageWorkspace

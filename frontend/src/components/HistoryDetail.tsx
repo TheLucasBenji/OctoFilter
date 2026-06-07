@@ -45,6 +45,7 @@ export default function HistoryDetailView({ id, apiBase, onClose, onLoadConfig, 
     convergence: detail.convergence,
     metrics: detail.metrics,
     params: detail.params,
+    elapsed_ms: detail.duration_ms ?? undefined,
   };
   const convergencePoints: ConvergencePoint[] = detail.convergence.map((c, i) => ({
     iteration: i + 1,
