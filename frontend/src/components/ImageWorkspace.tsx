@@ -1,6 +1,8 @@
 import { useState, useRef, useCallback } from 'react';
 import { VscArrowBoth } from 'react-icons/vsc';
+import { FiImage, FiFileText } from 'react-icons/fi';
 import { AppState } from '../types';
+import PdfExportButton from './PdfExportButton';
 
 interface Props {
   appState: AppState;
@@ -8,6 +10,7 @@ interface Props {
   noisyImage: string | null;
   resultImage: string | null;
   onFileUpload: (file: File) => void;
+  onExportPdf?: () => Promise<void> | void;
   readOnly?: boolean;
 }
 
@@ -63,7 +66,7 @@ function CompareSlider({ original, noisy }: { original: string; noisy: string })
   );
 }
 
-export default function ImageWorkspace({ appState, originalImage, noisyImage, resultImage, onFileUpload, readOnly = false }: Props) {
+export default function ImageWorkspace({ appState, originalImage, noisyImage, resultImage, onFileUpload, onExportPdf, readOnly = false }: Props) {
   const [drag, setDrag] = useState(false);
 
   const handleFiles = (files: FileList | null) => {
@@ -132,8 +135,21 @@ export default function ImageWorkspace({ appState, originalImage, noisyImage, re
             </div>
             <div className="dl-link">
               <a href={`data:image/png;base64,${resultImage}`} download="octopus_result.png">
-                descargar PNG
+                <FiImage aria-hidden="true" />
+                PNG
               </a>
+              {onExportPdf && (
+                <>
+                  <span className="dl-sep" aria-hidden="true">·</span>
+                  <PdfExportButton
+                    className="dl-pdf-btn"
+                    label="PDF"
+                    loadingLabel="generando…"
+                    icon={<FiFileText aria-hidden="true" />}
+                    onExport={onExportPdf}
+                  />
+                </>
+              )}
             </div>
           </>
         ) : (

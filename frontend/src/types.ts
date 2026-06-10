@@ -63,6 +63,7 @@ export interface OptimizationResult {
   convergence: number[];
   metrics: ResultMetrics;
   params: Record<string, number>;
+  duration_ms?: number | null;
 }
 
 export type AppState = 'idle' | 'previewing' | 'optimizing' | 'complete' | 'error';

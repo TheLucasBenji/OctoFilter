@@ -322,6 +322,8 @@ def run_optimization(
         complete_params = {name: float(val) for name, val in zip(fmod.PARAM_NAMES, best_pos)}
         complete_convergence = [float(c) for c in convergence]
 
+        duration_ms = int((time.time() - started_at) * 1000)
+
         try:
             _, result_buf = cv2.imencode(".png", result_u8)
             hist_mod.save_optimization(
@@ -337,7 +339,7 @@ def run_optimization(
                     "noisy": noisy_bytes,
                     "result": result_buf.tobytes(),
                 },
-                duration_ms=int((time.time() - started_at) * 1000),
+                duration_ms=duration_ms,
             )
         except Exception:
             import traceback as _tb
@@ -349,6 +351,7 @@ def run_optimization(
             "convergence": complete_convergence,
             "metrics": complete_metrics,
             "params": complete_params,
+            "duration_ms": duration_ms,
         })
     except OptimizationCancelled:
         q.put_nowait({"type": "cancelled"})

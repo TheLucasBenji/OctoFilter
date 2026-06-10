@@ -1,10 +1,12 @@
 import { useState } from 'react';
-import type { ButtonHTMLAttributes } from 'react';
+import type { ButtonHTMLAttributes, ReactNode } from 'react';
 
 interface Props extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'onClick'> {
   onExport: () => Promise<void> | void;
   label?: string;
   loadingLabel?: string;
+  icon?: ReactNode;
+  iconOnly?: boolean;
   onError?: (error: unknown) => void;
 }
 
@@ -18,6 +20,8 @@ export default function PdfExportButton({
   onExport,
   label = 'Exportar PDF',
   loadingLabel = 'Generando PDF...',
+  icon,
+  iconOnly = false,
   className,
   disabled,
   onError,
@@ -48,14 +52,19 @@ export default function PdfExportButton({
     <button
       {...props}
       type={type}
-      className={`pdf-export-btn${className ? ` ${className}` : ''}`}
+      className={`pdf-export-btn${iconOnly ? ' pdf-export-btn--icon' : ''}${className ? ` ${className}` : ''}`}
       onClick={() => { void handleClick(); }}
       disabled={disabled || exporting}
       aria-busy={exporting}
+      aria-label={iconOnly ? (exporting ? loadingLabel : label) : undefined}
+      title={iconOnly ? label : undefined}
     >
-      <span className="pdf-export-btn-label">
-        {exporting ? loadingLabel : label}
-      </span>
+      {icon && <span className="pdf-export-btn-icon" aria-hidden="true">{icon}</span>}
+      {!iconOnly && (
+        <span className="pdf-export-btn-label">
+          {exporting ? loadingLabel : label}
+        </span>
+      )}
       {exporting && <span className="pdf-export-btn-progress" aria-hidden="true" />}
     </button>
   );

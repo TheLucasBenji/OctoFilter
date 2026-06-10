@@ -81,11 +81,23 @@ export default function App() {
   const [result, setResult] = useState<OptimizationResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [activeJobId, setActiveJobId] = useState<string | null>(null);
+  const [elapsedMs, setElapsedMs] = useState(0);
 
   const fileRef = useRef<File | null>(null);
   const evsRef = useRef<EventSource | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const cancelRequestedRef = useRef(false);
+  const startTimeRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (appState !== 'optimizing') return;
+    const id = setInterval(() => {
+      if (startTimeRef.current != null) {
+        setElapsedMs(Date.now() - startTimeRef.current);
+      }
+    }, 100);
+    return () => clearInterval(id);
+  }, [appState]);
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -242,6 +254,8 @@ export default function App() {
     evsRef.current?.close();
     cancelRequestedRef.current = false;
 
+    startTimeRef.current = Date.now();
+    setElapsedMs(0);
     setAppState('optimizing');
     setActiveJobId(null);
     setConvergence([]);
@@ -308,6 +322,8 @@ export default function App() {
         setResultImage(ev.result_image);
         setResult(ev as OptimizationResult);
         setConvergence(ev.convergence.map((c: number, i: number) => ({ iteration: i + 1, cost: c })));
+        if (typeof ev.duration_ms === 'number') setElapsedMs(ev.duration_ms);
+        startTimeRef.current = null;
         setAppState('complete');
         setActiveJobId(null);
         cancelRequestedRef.current = false;
@@ -552,6 +568,7 @@ export default function App() {
               canRun={!!originalImage && appState !== 'optimizing'}
               appState={appState}
               currentIteration={currentIteration}
+              elapsedMs={elapsedMs}
               mode={configMode}
             />
 
@@ -566,38 +583,33 @@ export default function App() {
               : <>
                   {error && <div className="err-banner">{error}</div>}
 
-                  {result && (
-                    <div className="workspace-pdf-bar">
-                      <PdfExportButton
-                        className="workspace-pdf-btn"
-                        onExport={() =>
-                          exportReportPdf({
-                            filterType: params.filterType,
-                            metricType: params.metricType,
-                            noiseType: params.noiseType,
-                            noiseSigma: params.noiseSigma,
-                            noiseAmount: params.noiseAmount,
-                            population: params.population,
-                            iterations: params.iterations,
-                            seed: params.seed,
-                            params: result.params,
-                            metrics: result.metrics,
-                            convergence: result.convergence,
-                            originalImage,
-                            noisyImage,
-                            resultImage,
-                          })
-                        }
-                      />
-                    </div>
-                  )}
-
                   <ImageWorkspace
                     appState={appState}
                     originalImage={originalImage}
                     noisyImage={noisyImage}
                     resultImage={resultImage}
                     onFileUpload={handleFileUpload}
+                    onExportPdf={
+                      result
+                        ? () =>
+                            exportReportPdf({
+                              filterType: params.filterType,
+                              metricType: params.metricType,
+                              noiseType: params.noiseType,
+                              noiseSigma: params.noiseSigma,
+                              noiseAmount: params.noiseAmount,
+                              population: params.population,
+                              iterations: params.iterations,
+                              seed: params.seed,
+                              params: result.params,
+                              metrics: result.metrics,
+                              convergence: result.convergence,
+                              originalImage,
+                              noisyImage,
+                              resultImage,
+                            })
+                        : undefined
+                    }
                   />
 
                   {(convergence.length > 0 || result) && (

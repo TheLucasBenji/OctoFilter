@@ -17,7 +17,16 @@ interface Props {
   canRun: boolean;
   appState: AppState;
   currentIteration: number;
+  elapsedMs: number;
   mode: ConfigMode;
+}
+
+function formatDuration(ms: number): string {
+  const totalSec = ms / 1000;
+  if (totalSec < 60) return `${totalSec.toFixed(1)}s`;
+  const min = Math.floor(totalSec / 60);
+  const sec = Math.round(totalSec % 60);
+  return `${min}m ${sec}s`;
 }
 
 const FILTERS: { value: FilterType; label: string; short: string; desc: string }[] = [
@@ -57,6 +66,7 @@ function RunBlock({
   canRun,
   appState,
   currentIteration,
+  elapsedMs,
   iterations,
   onRun,
   onCancel,
@@ -65,6 +75,7 @@ function RunBlock({
   canRun: boolean;
   appState: AppState;
   currentIteration: number;
+  elapsedMs: number;
   iterations: number;
   onRun: () => void;
   onCancel: () => void;
@@ -81,6 +92,7 @@ function RunBlock({
           <span className="run-busy-label">
             <span className="spinner" />
             Optimizando...
+            <span className="run-busy-time">{formatDuration(elapsedMs)}</span>
           </span>
           <button
             type="button"
@@ -103,7 +115,7 @@ function RunBlock({
           </div>
           <div className="progress-meta">
             <span>{locked ? `iter ${currentIteration} / ${iterations}` : 'completo'}</span>
-            <span>{pct}%</span>
+            <span>{locked ? `${pct}%` : elapsedMs > 0 ? formatDuration(elapsedMs) : 'completo'}</span>
           </div>
         </div>
       )}
@@ -119,6 +131,7 @@ export default function Sidebar({
   canRun,
   appState,
   currentIteration,
+  elapsedMs,
   mode,
 }: Props) {
   const [filterInfo, setFilterInfo] = useState<Record<string, FilterInfo>>({});
@@ -444,6 +457,7 @@ export default function Sidebar({
         canRun={canRun}
         appState={appState}
         currentIteration={currentIteration}
+        elapsedMs={elapsedMs}
         iterations={params.iterations}
         onRun={onRun}
         onCancel={onCancel}

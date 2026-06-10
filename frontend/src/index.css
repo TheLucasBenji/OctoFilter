@@ -1608,6 +1608,15 @@ input[type='range']:disabled {
   letter-spacing: 0.04em;
 }
 
+.run-busy-time {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0;
+  color: var(--t3);
+  font-variant-numeric: tabular-nums;
+}
+
 .stop-btn {
   width: 28px;
   height: 28px;
@@ -2363,11 +2372,16 @@ input[type='range']:disabled {
 /* Download link */
 .dl-link {
   display: flex;
+  align-items: center;
   justify-content: center;
+  gap: 7px;
   padding: 8px;
 }
 
 .dl-link a {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   font-size: 10px;
   font-family: var(--mono);
   color: var(--t3);
@@ -2379,24 +2393,41 @@ input[type='range']:disabled {
   color: var(--a);
 }
 
-.workspace-pdf-bar {
-  display: flex;
-  justify-content: flex-end;
-  padding: 8px 16px 12px;
+.dl-link svg {
+  width: 12px;
+  height: 12px;
 }
 
-.workspace-pdf-btn {
-  padding: 5px 14px;
-  border-radius: calc(var(--r) - 2px);
-  border: 1px solid var(--a);
+.dl-pdf-btn .pdf-export-btn-icon {
+  display: inline-flex;
+}
+
+.dl-sep {
+  font-size: 10px;
+  color: var(--line-md);
+}
+
+.dl-pdf-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0;
+  border: none;
   background: transparent;
-  font-size: 11px;
-  font-family: var(--ui);
-  color: var(--a);
+  font-size: 10px;
+  font-family: var(--mono);
+  color: var(--t3);
   cursor: pointer;
-  transition:
-    background 0.12s,
-    color 0.12s;
+  transition: color 0.12s;
+}
+
+.dl-pdf-btn:hover:not(:disabled) {
+  color: var(--a);
+}
+
+.dl-pdf-btn:disabled {
+  cursor: progress;
+  opacity: 0.7;
 }
 
 .pdf-export-btn {
@@ -2434,15 +2465,6 @@ input[type='range']:disabled {
   to {
     left: 100%;
   }
-}
-
-.workspace-pdf-btn:hover:not(:disabled) {
-  background: var(--a-dim);
-}
-
-.workspace-pdf-btn:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
 }
 
 /* ── History toggle button ─────────────────────────────────────────── */
