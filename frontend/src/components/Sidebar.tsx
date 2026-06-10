@@ -1,6 +1,16 @@
 import { useEffect, useState } from 'react';
 import { FaRegCircleStop } from 'react-icons/fa6';
-import { AlgorithmType, AppParams, AppState, ConfigMode, FilterInfo, FilterType, MetricType, NoiseType } from '../types';
+import {
+  AlgorithmType,
+  AppParams,
+  AppState,
+  ConfigMode,
+  FilterInfo,
+  FilterType,
+  MetricType,
+  NoiseType,
+  RuntimeEstimate,
+} from '../types';
 import { ALGORITHM_HELP, FILTER_HELP, METRIC_HELP, NOISE_HELP, TERM_HELP, getParamHelp } from '../helpTexts';
 import { getParamDescription, getParamDisplayName } from '../paramMetadata';
 import InfoHint from './InfoHint';
@@ -19,6 +29,20 @@ interface Props {
   currentIteration: number;
   elapsedMs: number;
   mode: ConfigMode;
+  estimate: RuntimeEstimate | null;
+  estimating: boolean;
+}
+
+const ESTIMATE_HELP =
+  'Estimación basada en el número de evaluaciones de la función objetivo (NFE) que ejecutará el algoritmo, ' +
+  'multiplicado por el costo de una evaluación (filtro + métrica) medido sobre tu imagen mediante una calibración rápida. ' +
+  'El rango cubre desde el costo mínimo observado hasta el costo medio del espacio de búsqueda.';
+
+function formatEstimateRange(est: RuntimeEstimate): string {
+  const low = Math.min(est.estimated_low_ms, est.estimated_ms);
+  const high = est.estimated_ms;
+  if (low >= high * 0.75) return `~${formatDuration(high)}`;
+  return `${formatDuration(low)} – ${formatDuration(high)}`;
 }
 
 function formatDuration(ms: number): string {
@@ -70,6 +94,8 @@ function RunBlock({
   iterations,
   onRun,
   onCancel,
+  estimate,
+  estimating,
 }: {
   locked: boolean;
   canRun: boolean;
@@ -79,6 +105,8 @@ function RunBlock({
   iterations: number;
   onRun: () => void;
   onCancel: () => void;
+  estimate: RuntimeEstimate | null;
+  estimating: boolean;
 }) {
   const pct =
     appState === 'optimizing' ? Math.round((currentIteration / (iterations || 1)) * 100)
@@ -87,6 +115,20 @@ function RunBlock({
 
   return (
     <div className="sb-group sb-run">
+      {!locked && canRun && (estimating || estimate != null) && (
+        <div className="estimate-line" title={ESTIMATE_HELP}>
+          {estimating ?
+            <>
+              <span className="spinner" />
+              Estimando tiempo…
+            </>
+          : <>
+              Tiempo estimado:
+              <span className="estimate-value">{formatEstimateRange(estimate!)}</span>
+            </>
+          }
+        </div>
+      )}
       {locked ?
         <div className="run-busy">
           <span className="run-busy-label">
@@ -133,6 +175,8 @@ export default function Sidebar({
   currentIteration,
   elapsedMs,
   mode,
+  estimate,
+  estimating,
 }: Props) {
   const [filterInfo, setFilterInfo] = useState<Record<string, FilterInfo>>({});
   const locked = appState === 'optimizing';
@@ -461,6 +505,8 @@ export default function Sidebar({
         iterations={params.iterations}
         onRun={onRun}
         onCancel={onCancel}
+        estimate={estimate}
+        estimating={estimating}
       />
     </aside>
   );

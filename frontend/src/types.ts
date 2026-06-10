@@ -66,6 +66,15 @@ export interface OptimizationResult {
   duration_ms?: number | null;
 }
 
+export interface RuntimeEstimate {
+  estimated_low_ms: number;
+  estimated_ms: number;
+  nfe: number;
+  t_eval_mean_ms: number;
+  t_eval_min_ms: number;
+  parallel_speedup: number;
+}
+
 export type AppState = 'idle' | 'previewing' | 'optimizing' | 'complete' | 'error';
 export type AppView = 'workspace' | 'history' | 'experimental';
 
