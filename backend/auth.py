@@ -129,17 +129,40 @@ def init_auth_db() -> None:
               noisy_path    TEXT,
               result_path   TEXT,
               duration_ms   INTEGER,
-              algorithm     TEXT
+              algorithm     TEXT,
+              config_mode   TEXT NOT NULL DEFAULT 'advanced'
             );
 
             CREATE INDEX IF NOT EXISTS idx_optimizations_user_created
               ON optimizations(user_id, created_at DESC);
+
+            CREATE TABLE IF NOT EXISTS experimental_runs (
+              id            INTEGER PRIMARY KEY AUTOINCREMENT,
+              user_id       INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+              created_at    TEXT    NOT NULL,
+              filter_type   TEXT    NOT NULL,
+              params_json   TEXT    NOT NULL,
+              input_path    TEXT,
+              result_path   TEXT,
+              duration_ms   INTEGER,
+              source_mode   TEXT NOT NULL DEFAULT 'experimental'
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_experimental_runs_user_created
+              ON experimental_runs(user_id, created_at DESC);
             """
         )
 
         # Migration: add algorithm column to existing databases
         try:
             conn.execute("ALTER TABLE optimizations ADD COLUMN algorithm TEXT")
+        except Exception:
+            pass  # column already exists
+
+        try:
+            conn.execute(
+                "ALTER TABLE optimizations ADD COLUMN config_mode TEXT NOT NULL DEFAULT 'advanced'"
+            )
         except Exception:
             pass  # column already exists
 

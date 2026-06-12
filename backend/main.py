@@ -91,6 +91,9 @@ ALGORITHM_LABELS = {
     "sfoa": "Starfish",
 }
 
+CONFIG_MODES = {"basic", "advanced"}
+HISTORY_ENTRY_TYPES = {"optimization", "experimental"}
+
 
 @dataclass
 class OptimizationJob:
@@ -405,7 +408,10 @@ async def manual_filter(
     image: UploadFile = File(...),
     filter_type: str = Form("bilateral"),
     params: str = Form(...),
+    save_history: bool = Form(False),
+    source_mode: str = Form("experimental"),
 ):
+    started_at = time.time()
     data = await image.read()
     img = decode_image(data)
     if img is None:
@@ -413,6 +419,8 @@ async def manual_filter(
 
     if filter_type not in FILTER_MODULES:
         raise HTTPException(400, f"filter_type inválido: '{filter_type}'")
+    if source_mode != "experimental":
+        raise HTTPException(400, f"source_mode inválido: '{source_mode}'")
 
     try:
         raw_params = json.loads(params)
@@ -437,12 +445,33 @@ async def manual_filter(
     params_arr = _coerce_manual_params(filter_type, params_arr)
     result = fmod.apply(img, params_arr)
     result_u8 = np.clip(result, 0, 255).astype(np.uint8)
+    params_used = {name: float(val) for name, val in zip(fmod.PARAM_NAMES, params_arr)}
 
-    return {
+    response = {
         "original_image": encode_image(img),
         "result_image": encode_image(result_u8),
-        "params_used": {name: float(val) for name, val in zip(fmod.PARAM_NAMES, params_arr)},
+        "params_used": params_used,
     }
+
+    if save_history:
+        _, input_buf = cv2.imencode(".png", img)
+        _, result_buf = cv2.imencode(".png", result_u8)
+        duration_ms = int((time.time() - started_at) * 1000)
+        history_id = hist_mod.save_experimental_run(
+            _user["id"],
+            filter_type=filter_type,
+            params_used=params_used,
+            images={
+                "input": input_buf.tobytes(),
+                "result": result_buf.tobytes(),
+            },
+            duration_ms=duration_ms,
+            source_mode=source_mode,
+        )
+        response["history_id"] = history_id
+        response["history_key"] = f"experimental:{history_id}"
+
+    return response
 
 
 @app.post("/api/preview-noise")
@@ -661,6 +690,7 @@ async def start_optimize(
     iterations: int = Form(50),
     seed: Optional[int] = Form(None),
     algorithm: str = Form("ooa"),
+    config_mode: str = Form("advanced"),
 ):
     data = await image.read()
     original = decode_image(data)
@@ -683,6 +713,8 @@ async def start_optimize(
         raise HTTPException(400, "noise_amount debe estar entre 0 y 1")
     if algorithm not in ALGORITHMS:
         raise HTTPException(400, f"algorithm inválido: '{algorithm}'")
+    if config_mode not in CONFIG_MODES:
+        raise HTTPException(400, f"config_mode inválido: '{config_mode}'")
 
     rng_noise = np.random.default_rng(seed)
     if noise_type == "gaussian":
@@ -705,6 +737,7 @@ async def start_optimize(
         "iterations": iterations,
         "seed": seed,
         "algorithm": algorithm,
+        "config_mode": config_mode,
     }
 
     _sweep_jobs()
@@ -784,7 +817,25 @@ def list_history(
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
 ):
-    return hist_mod.list_optimizations(user["id"], limit=limit, offset=offset)
+    return hist_mod.list_history(user["id"], limit=limit, offset=offset)
+
+
+@app.get("/api/history/{entry_type}/{entry_id}")
+def get_history_entry(entry_type: str, entry_id: int, user: dict = Depends(require_user)):
+    if entry_type not in HISTORY_ENTRY_TYPES:
+        raise HTTPException(404, "Not found")
+    item = hist_mod.get_history_entry(user["id"], entry_type, entry_id)
+    if item is None:
+        raise HTTPException(404, "Not found")
+    return item
+
+
+@app.delete("/api/history/{entry_type}/{entry_id}", status_code=204)
+def delete_history_entry(entry_type: str, entry_id: int, user: dict = Depends(require_user)):
+    if entry_type not in HISTORY_ENTRY_TYPES:
+        raise HTTPException(404, "Not found")
+    if not hist_mod.delete_history_entry(user["id"], entry_type, entry_id):
+        raise HTTPException(404, "Not found")
 
 
 @app.get("/api/history/{opt_id}")
