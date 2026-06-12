@@ -1,5 +1,6 @@
 import asyncio
 import base64
+import concurrent.futures
 import json
 import os
 import queue
@@ -38,7 +39,12 @@ app = FastAPI(title="Octopus API")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:5174",
+        "http://127.0.0.1:5174",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -217,6 +223,24 @@ def logout(
     return {"status": "logged_out"}
 
 
+def _adjusted_bounds(filter_type: str, noise_estimate: float) -> tuple[np.ndarray, np.ndarray]:
+    """Límites de búsqueda ajustados según el nivel de ruido estimado (idéntico al usado al optimizar)."""
+    fmod = FILTER_MODULES[filter_type]
+    lb = fmod.LOWER_BOUNDS.copy()
+    ub = fmod.UPPER_BOUNDS.copy()
+
+    if filter_type == "bilateral":
+        lb[1] = max(10.0, noise_estimate * 0.5)
+        ub[1] = min(200.0, noise_estimate * 3.0)
+        lb[2] = max(10.0, noise_estimate * 0.5)
+        ub[2] = min(200.0, noise_estimate * 3.0)
+    elif filter_type == "anisotropic":
+        lb[1] = max(10.0, noise_estimate * 0.5)
+        ub[1] = min(100.0, noise_estimate * 3.0)
+
+    return lb, ub
+
+
 def run_optimization(
     job_id: str,
     original: np.ndarray,
@@ -239,19 +263,8 @@ def run_optimization(
         fmod = FILTER_MODULES[filter_type]
         rng = np.random.default_rng(seed)
 
-        lb = fmod.LOWER_BOUNDS.copy()
-        ub = fmod.UPPER_BOUNDS.copy()
-
         noise_estimate = float(np.std(noisy.astype(np.float32) - original.astype(np.float32)))
-
-        if filter_type == "bilateral":
-            lb[1] = max(10.0, noise_estimate * 0.5)
-            ub[1] = min(200.0, noise_estimate * 3.0)
-            lb[2] = max(10.0, noise_estimate * 0.5)
-            ub[2] = min(200.0, noise_estimate * 3.0)
-        elif filter_type == "anisotropic":
-            lb[1] = max(10.0, noise_estimate * 0.5)
-            ub[1] = min(100.0, noise_estimate * 3.0)
+        lb, ub = _adjusted_bounds(filter_type, noise_estimate)
 
         noisy_f32 = noisy.astype(np.float32)
         original_f32 = original.astype(np.float32)
@@ -458,6 +471,181 @@ async def preview_noise(
         "noisy_mse": float(img_metrics.mse(img.astype(np.float32), noisy.astype(np.float32))),
         "noisy_snr": float(img_metrics.snr(img.astype(np.float32), noisy.astype(np.float32))),
     }
+
+
+# ---------------------------------------------------------------------------
+# Estimación de tiempo de ejecución
+#
+# Modelo: T ≈ NFE_serial · t̄_serial + NFE_paralelo · t̄_paralelo + overhead
+#
+# El costo de una corrida de metaheurísticas poblacionales está dominado por
+# las evaluaciones de la función objetivo; por eso el "runtime" estándar en
+# benchmarking de optimizadores se mide en número de evaluaciones de función
+# (NFE), una medida independiente de la máquina (Hansen et al., COCO, 2021).
+# Para convertir NFE a tiempo de pared se calibra el costo medio de UNA
+# evaluación (filtro + métrica) con un micro-benchmark sobre la imagen real
+# a resolución completa (los filtros de OpenCV paralelizan internamente y
+# tienen overhead por llamada, así que extrapolar desde un recorte no es
+# fiable). Los parámetros de cada muestra se eligen por muestreo de
+# hipercubo latino (McKay, Beckman & Conover, 1979) sobre [lb, ub] — la
+# misma región que exploran los algoritmos — para cubrir el rango de costos
+# parámetro-dependientes (p. ej. tamaño de ventana de NLM) con pocas
+# muestras y baja varianza.
+#
+# Como el costo por evaluación depende fuertemente de los parámetros
+# (bilateral ∝ d², NLM ∝ ventana²) y el algoritmo converge hacia una región
+# de costo desconocido a priori, se reporta un rango en vez de un punto:
+#   cota inferior = NFE · t_min   (todas las evaluaciones al costo mínimo
+#                                  observado en la calibración)
+#   cota superior = NFE · t̄      (costo esperado bajo muestreo uniforme
+#                                  del espacio de búsqueda)
+# ---------------------------------------------------------------------------
+
+CALIBRATION_SAMPLES_SERIAL = 4
+CALIBRATION_SAMPLES_PARALLEL = 8
+ESTIMATE_OVERHEAD_MS = 500.0
+
+
+def _lhs_samples(k: int, lb: np.ndarray, ub: np.ndarray, rng: np.random.Generator) -> list[np.ndarray]:
+    """k muestras por hipercubo latino en [lb, ub] (un estrato por muestra y dimensión)."""
+    dim = len(lb)
+    strata = np.tile(np.arange(k, dtype=float), (dim, 1))
+    strata = rng.permuted(strata, axis=1).T
+    u = (strata + rng.random((k, dim))) / k
+    return list(lb + u * (ub - lb))
+
+
+def _eval_counts(algorithm: str, population: int, iterations: int) -> tuple[int, int]:
+    """NFE que ejecutará cada algoritmo, separadas en (paralelas, seriales).
+
+    SFOA evalúa toda la población de forma serial: N al inicializar y N por
+    iteración. OOA evalúa la inicialización y los tentáculos en lotes con
+    ThreadPoolExecutor, y los exploradores (N mod 9) de forma serial; las
+    reevaluaciones ocasionales de tentáculos al mejorar una cabeza son
+    estocásticas y se omiten del conteo.
+    """
+    if algorithm == "sfoa":
+        return 0, population * (iterations + 1)
+
+    n_scout = population % 9
+    n_head = max((population - n_scout) // 9, 1)
+    n_tentacles = max(population - n_head - n_scout, 1)
+    extra_iters = max(iterations - 1, 0)
+
+    parallel = population + extra_iters * n_tentacles
+    serial = extra_iters * n_scout
+    return parallel, serial
+
+
+def _run_calibration(
+    original: np.ndarray,
+    filter_type: str,
+    metric: str,
+    noise_type: str,
+    noise_sigma: float,
+    noise_amount: float,
+    population: int,
+    iterations: int,
+    seed: Optional[int],
+    algorithm: str,
+) -> dict:
+    # Semilla fija por defecto: la estimación debe ser estable entre llamadas
+    rng = np.random.default_rng(seed if seed is not None else 0)
+    if noise_type == "gaussian":
+        noisy = img_noise.add_gaussian_noise(original, sigma=noise_sigma, rng=rng)
+    else:
+        noisy = img_noise.add_salt_and_pepper_noise(original, amount=noise_amount, rng=rng)
+
+    fmod = FILTER_MODULES[filter_type]
+    noise_estimate = float(np.std(noisy.astype(np.float32) - original.astype(np.float32)))
+    lb, ub = _adjusted_bounds(filter_type, noise_estimate)
+
+    noisy_f32 = noisy.astype(np.float32)
+    original_f32 = original.astype(np.float32)
+
+    def objective(params_vec: np.ndarray) -> float:
+        filtered = fmod.apply(noisy_f32, params_vec)
+        if metric == "snr":
+            return -img_metrics.snr(original_f32, filtered)
+        if metric == "piqe":
+            u8 = np.clip(filtered, 0, 255).astype(np.uint8)
+            return img_metrics.piqe(u8)
+        return img_metrics.mse(original_f32, filtered)
+
+    nfe_parallel, nfe_serial = _eval_counts(algorithm, population, iterations)
+
+    # Costo por evaluación: media y mínimo sobre muestras LHS cronometradas en serie
+    sample_times: list[float] = []
+    for sample in _lhs_samples(CALIBRATION_SAMPLES_SERIAL, lb, ub, rng):
+        t0 = time.perf_counter()
+        objective(sample)
+        sample_times.append(time.perf_counter() - t0)
+    t_mean = sum(sample_times) / len(sample_times)
+    t_min = min(sample_times)
+
+    # Factor de aceleración de los lotes paralelos (ThreadPoolExecutor de OOA)
+    speedup = 1.0
+    if nfe_parallel > 0:
+        samples = _lhs_samples(CALIBRATION_SAMPLES_PARALLEL, lb, ub, rng)
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            t0 = time.perf_counter()
+            list(executor.map(objective, samples))
+            t_batch = (time.perf_counter() - t0) / len(samples)
+        speedup = max(t_mean / t_batch, 1.0)
+
+    def total_ms(t_eval: float) -> float:
+        return (nfe_serial * t_eval + nfe_parallel * t_eval / speedup) * 1000.0 + ESTIMATE_OVERHEAD_MS
+
+    return {
+        "estimated_low_ms": float(total_ms(t_min)),
+        "estimated_ms": float(total_ms(t_mean)),
+        "nfe": int(nfe_serial + nfe_parallel),
+        "t_eval_mean_ms": float(t_mean * 1000.0),
+        "t_eval_min_ms": float(t_min * 1000.0),
+        "parallel_speedup": float(speedup),
+    }
+
+
+@app.post("/api/estimate")
+async def estimate_runtime(
+    _user: dict = Depends(require_user),
+    image: UploadFile = File(...),
+    filter_type: str = Form("bilateral"),
+    metric: str = Form("mse"),
+    noise_type: str = Form("gaussian"),
+    noise_sigma: float = Form(25.0),
+    noise_amount: float = Form(0.05),
+    population: int = Form(30),
+    iterations: int = Form(50),
+    seed: Optional[int] = Form(None),
+    algorithm: str = Form("ooa"),
+):
+    data = await image.read()
+    original = decode_image(data)
+    if original is None:
+        raise HTTPException(400, "Invalid image")
+
+    if filter_type not in FILTER_MODULES:
+        raise HTTPException(400, f"filter_type inválido: '{filter_type}'")
+    if metric not in {"mse", "snr", "piqe"}:
+        raise HTTPException(400, f"metric inválido: '{metric}'")
+    if noise_type not in {"gaussian", "sp"}:
+        raise HTTPException(400, f"noise_type inválido: '{noise_type}'")
+    if not (9 <= population <= 200):
+        raise HTTPException(400, "population debe estar entre 9 y 200")
+    if not (1 <= iterations <= 500):
+        raise HTTPException(400, "iterations debe estar entre 1 y 500")
+    if algorithm not in ALGORITHMS:
+        raise HTTPException(400, f"algorithm inválido: '{algorithm}'")
+
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(
+        None,
+        lambda: _run_calibration(
+            original, filter_type, metric, noise_type, noise_sigma,
+            noise_amount, population, iterations, seed, algorithm,
+        ),
+    )
 
 
 @app.post("/api/optimize")

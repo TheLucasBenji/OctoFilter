@@ -11,6 +11,7 @@ import {
   ConfigMode,
   ThemePreference,
   HistoryDetail,
+  RuntimeEstimate,
 } from './types';
 import Sidebar from './components/Sidebar';
 import ImageWorkspace from './components/ImageWorkspace';
@@ -82,10 +83,14 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [activeJobId, setActiveJobId] = useState<string | null>(null);
   const [elapsedMs, setElapsedMs] = useState(0);
+  const [estimate, setEstimate] = useState<RuntimeEstimate | null>(null);
+  const [estimating, setEstimating] = useState(false);
 
   const fileRef = useRef<File | null>(null);
   const evsRef = useRef<EventSource | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const estimateDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const estimateAbortRef = useRef<AbortController | null>(null);
   const cancelRequestedRef = useRef(false);
   const startTimeRef = useRef<number | null>(null);
 
@@ -119,7 +124,10 @@ export default function App() {
   const clearWorkspace = useCallback(() => {
     fileRef.current = null;
     evsRef.current?.close();
+    estimateAbortRef.current?.abort();
     cancelRequestedRef.current = false;
+    setEstimate(null);
+    setEstimating(false);
     setAppState('idle');
     setOriginalImage(null);
     setNoisyImage(null);
@@ -226,6 +234,70 @@ export default function App() {
     },
     [handleAuthExpired],
   );
+
+  const fetchEstimate = useCallback(
+    async (file: File, p: AppParams) => {
+      estimateAbortRef.current?.abort();
+      const ctrl = new AbortController();
+      estimateAbortRef.current = ctrl;
+      setEstimating(true);
+
+      const fd = new FormData();
+      fd.append('image', file);
+      fd.append('filter_type', p.filterType);
+      fd.append('metric', p.metricType);
+      fd.append('noise_type', p.noiseType);
+      fd.append('noise_sigma', p.noiseSigma.toString());
+      fd.append('noise_amount', p.noiseAmount.toString());
+      fd.append('population', p.population.toString());
+      fd.append('iterations', p.iterations.toString());
+      if (p.seed) fd.append('seed', p.seed);
+      fd.append('algorithm', p.algorithm);
+
+      try {
+        const r = await fetch(`${API}/api/estimate`, {
+          method: 'POST',
+          credentials: 'include',
+          body: fd,
+          signal: ctrl.signal,
+        });
+        if (r.status === 401) {
+          handleAuthExpired();
+          return;
+        }
+        if (!r.ok) throw new Error(`estimate ${r.status}`);
+        const d = (await r.json()) as RuntimeEstimate;
+        if (!ctrl.signal.aborted) setEstimate(d);
+      } catch {
+        if (!ctrl.signal.aborted) setEstimate(null);
+      } finally {
+        if (!ctrl.signal.aborted) setEstimating(false);
+      }
+    },
+    [handleAuthExpired],
+  );
+
+  useEffect(() => {
+    if (!fileRef.current || appState === 'optimizing') return;
+    if (estimateDebounceRef.current) clearTimeout(estimateDebounceRef.current);
+    estimateDebounceRef.current = setTimeout(() => fetchEstimate(fileRef.current!, params), 600);
+    return () => {
+      if (estimateDebounceRef.current) clearTimeout(estimateDebounceRef.current);
+    };
+  }, [
+    params.filterType,
+    params.metricType,
+    params.noiseType,
+    params.noiseSigma,
+    params.noiseAmount,
+    params.population,
+    params.iterations,
+    params.seed,
+    params.algorithm,
+    originalImage,
+    appState,
+    fetchEstimate,
+  ]);
 
   const handleFileUpload = useCallback(
     async (file: File) => {
@@ -570,6 +642,8 @@ export default function App() {
               currentIteration={currentIteration}
               elapsedMs={elapsedMs}
               mode={configMode}
+              estimate={estimate}
+              estimating={estimating}
             />
 
             <main className="main">
