@@ -2599,6 +2599,15 @@ input[type='range']:disabled {
 .history-metric {
   font-family: var(--mono);
 }
+.history-kind,
+.history-mode {
+  font-size: 11px;
+  color: var(--t2);
+}
+.history-kind {
+  font-family: var(--mono);
+  font-weight: 700;
+}
 .history-cost {
   font-family: var(--mono);
   font-size: 11px;
@@ -2608,6 +2617,20 @@ input[type='range']:disabled {
   display: flex;
   gap: 6px;
   justify-content: flex-end;
+  align-items: center;
+}
+
+.history-pdf-action {
+  display: inline-flex;
+  align-items: center;
+}
+
+.history-pdf-action-disabled {
+  cursor: not-allowed;
+}
+
+.history-pdf-action-disabled .hist-btn-pdf-disabled {
+  pointer-events: none;
 }
 
 .hist-btn {
@@ -2653,6 +2676,12 @@ input[type='range']:disabled {
 }
 .hist-btn-pdf:hover:not(:disabled) {
   background: var(--a-dim);
+}
+.hist-btn-pdf.hist-btn-pdf-disabled,
+.hist-btn-pdf.hist-btn-pdf-disabled:disabled {
+  color: var(--t3);
+  border-color: var(--line);
+  background: color-mix(in srgb, var(--raised) 72%, var(--line) 28%);
 }
 .hist-btn:disabled {
   opacity: 0.5;
@@ -2732,25 +2761,8 @@ input[type='range']:disabled {
   background: var(--green-dim);
 }
 
-.history-pdf-btn {
-  padding: 4px 12px;
-  border-radius: calc(var(--r) - 2px);
-  border: 1px solid var(--a);
-  background: transparent;
-  font-size: 12px;
-  font-family: var(--ui);
-  color: var(--a);
-  cursor: pointer;
-  transition: background 0.12s;
-  white-space: nowrap;
-}
-.history-pdf-btn:hover:not(:disabled) {
-  background: var(--a-dim);
-}
-
-.history-pdf-btn:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
+.history-experimental-images {
+  flex: 0 0 auto;
 }
 
 @media (max-width: 860px) {

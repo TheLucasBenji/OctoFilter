@@ -9,6 +9,7 @@ import {
   OptimizationResult,
   ConvergencePoint,
   ConfigMode,
+  ExperimentalConfig,
   ThemePreference,
   HistoryDetail,
   RuntimeEstimate,
@@ -72,6 +73,7 @@ export default function App() {
   const [view, setView] = useState<AppView>('workspace');
   const [params, setParams] = useState<AppParams>(DEFAULT_PARAMS);
   const [configMode, setConfigMode] = useState<ConfigMode>('basic');
+  const [experimentalConfig, setExperimentalConfig] = useState<ExperimentalConfig | null>(null);
   const [theme, setTheme] = useState<ThemePreference>(getInitialTheme);
   const [appState, setAppState] = useState<AppState>('idle');
   const [originalImage, setOriginalImage] = useState<string | null>(null);
@@ -347,6 +349,7 @@ export default function App() {
     fd.append('iterations', params.iterations.toString());
     if (params.seed) fd.append('seed', params.seed);
     fd.append('algorithm', params.algorithm);
+    fd.append('config_mode', configMode);
 
     let jobId: string;
     try {
@@ -431,7 +434,7 @@ export default function App() {
       }
       evs.close();
     };
-  }, [handleAuthExpired, params]);
+  }, [configMode, handleAuthExpired, params]);
 
   const handleCancel = useCallback(async () => {
     if (!activeJobId || appState !== 'optimizing') return;
@@ -488,6 +491,15 @@ export default function App() {
   }, [activeJobId, appState, clearWorkspace]);
 
   const handleLoadConfig = useCallback((detail: HistoryDetail) => {
+    if (detail.entry_type === 'experimental') {
+      setExperimentalConfig({
+        filterType: detail.filter_type,
+        params: detail.params,
+      });
+      setView('experimental');
+      return;
+    }
+
     setParams({
       filterType: detail.filter_type,
       metricType: detail.metric_type,
@@ -499,8 +511,12 @@ export default function App() {
       seed: detail.seed !== null ? String(detail.seed) : '',
       algorithm: detail.algorithm ?? 'ooa',
     });
-    setConfigMode('advanced');
+    setConfigMode(detail.source_mode === 'basic' ? 'basic' : 'advanced');
     setView('workspace');
+  }, []);
+
+  const handleExperimentalConfigApplied = useCallback(() => {
+    setExperimentalConfig(null);
   }, []);
 
   if (authStatus === 'checking') {
@@ -630,7 +646,12 @@ export default function App() {
 
       <div className="app-body">
         {view === 'experimental' ?
-          <ExperimentalView apiBase={API} onAuthExpired={handleAuthExpired} />
+          <ExperimentalView
+            apiBase={API}
+            initialConfig={experimentalConfig}
+            onInitialConfigApplied={handleExperimentalConfigApplied}
+            onAuthExpired={handleAuthExpired}
+          />
         : <>
             <Sidebar
               params={params}

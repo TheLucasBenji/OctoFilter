@@ -1,5 +1,5 @@
 import { jsPDF } from 'jspdf';
-import { FilterType, HistoryDetail, MetricType, NoiseType, ResultMetrics } from '../types';
+import { FilterType, MetricType, NoiseType, OptimizationHistoryDetail, ResultMetrics } from '../types';
 import { getParamDisplayInfo } from '../paramMetadata';
 
 export const FILTER_LABELS: Record<FilterType, string> = {
@@ -38,7 +38,7 @@ export interface ReportData {
   resultImage: string | null;
 }
 
-export function historyDetailToReport(d: HistoryDetail): ReportData {
+export function historyDetailToReport(d: OptimizationHistoryDetail): ReportData {
   return {
     filterType: d.filter_type,
     metricType: d.metric_type,
