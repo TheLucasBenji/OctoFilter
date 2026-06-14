@@ -26,6 +26,7 @@ export default function PdfExportButton({
   disabled,
   onError,
   type = 'button',
+  title,
   ...props
 }: Props) {
   const [exporting, setExporting] = useState(false);
@@ -57,7 +58,7 @@ export default function PdfExportButton({
       disabled={disabled || exporting}
       aria-busy={exporting}
       aria-label={iconOnly ? (exporting ? loadingLabel : label) : undefined}
-      title={iconOnly ? label : undefined}
+      title={title ?? (iconOnly ? label : undefined)}
     >
       {icon && <span className="pdf-export-btn-icon" aria-hidden="true">{icon}</span>}
       {!iconOnly && (

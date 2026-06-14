@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { FilterInfo, FilterParam, FilterType, ParamKind } from '../types';
+import { ExperimentalConfig, FilterInfo, FilterParam, FilterType, ParamKind } from '../types';
 import { FILTER_HELP, getParamHelp } from '../helpTexts';
 import { getParamDescription, normalizeParamName } from '../paramMetadata';
 import InfoHint from './InfoHint';
@@ -28,11 +28,23 @@ const FILTERS: { value: FilterType; label: string; short: string; desc: string }
 
 interface Props {
   apiBase: string;
+  initialConfig?: ExperimentalConfig | null;
+  onInitialConfigApplied?: () => void;
   onAuthExpired: () => void;
 }
 
 function buildDefaults(info: FilterInfo): number[] {
   return info.params.map(getDefaultParamValue);
+}
+
+function buildParamsFromRecord(info: FilterInfo, values: Record<string, number>): number[] {
+  return info.params.map((param) => {
+    const raw = values[param.name] ?? (param.key ? values[param.key] : undefined);
+    if (typeof raw === 'number' && Number.isFinite(raw)) {
+      return normalizeParamValue(raw, param);
+    }
+    return getDefaultParamValue(param);
+  });
 }
 
 function inferParamKind(name: string): ParamKind {
@@ -421,7 +433,12 @@ function ExperimentalSidebar({
   );
 }
 
-export default function ExperimentalView({ apiBase, onAuthExpired }: Props) {
+export default function ExperimentalView({
+  apiBase,
+  initialConfig,
+  onInitialConfigApplied,
+  onAuthExpired,
+}: Props) {
   const [filterInfo, setFilterInfo] = useState<Record<string, FilterInfo>>({});
   const [filterType, setFilterType] = useState<FilterType>('bilateral');
   const [paramsByFilter, setParamsByFilter] = useState<Record<FilterType, number[]>>(
@@ -468,6 +485,20 @@ export default function ExperimentalView({ apiBase, onAuthExpired }: Props) {
       })
       .catch(() => {});
   }, [apiBase, onAuthExpired]);
+
+  useEffect(() => {
+    if (!initialConfig) return;
+    const nextFilter = filterInfo[initialConfig.filterType];
+    if (!nextFilter) return;
+
+    setFilterType(initialConfig.filterType);
+    setParamsByFilter((prev) => ({
+      ...prev,
+      [initialConfig.filterType]: buildParamsFromRecord(nextFilter, initialConfig.params),
+    }));
+    setError(null);
+    onInitialConfigApplied?.();
+  }, [filterInfo, initialConfig, onInitialConfigApplied]);
 
   const updatePreview = useCallback((file: File) => {
     if (previewRef.current) {
@@ -517,6 +548,8 @@ export default function ExperimentalView({ apiBase, onAuthExpired }: Props) {
     fd.append('image', fileRef.current);
     fd.append('filter_type', filterType);
     fd.append('params', JSON.stringify(cleaned));
+    fd.append('save_history', 'true');
+    fd.append('source_mode', 'experimental');
 
     setStatus('applying');
     setError(null);

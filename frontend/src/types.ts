@@ -3,6 +3,8 @@ export type MetricType = 'mse' | 'snr' | 'piqe';
 export type NoiseType = 'gaussian' | 'sp';
 export type AlgorithmType = 'ooa' | 'sfoa';
 export type ConfigMode = 'basic' | 'advanced';
+export type HistoryEntryType = 'optimization' | 'experimental';
+export type HistorySourceMode = ConfigMode | 'experimental';
 export type ThemePreference = 'light' | 'dark';
 export type ParamKind = 'float' | 'int' | 'odd-int' | 'choice';
 
@@ -83,24 +85,43 @@ export interface ConvergencePoint {
   cost: number;
 }
 
-export interface HistorySummary {
+interface HistoryBase {
   id: number;
+  entry_type: HistoryEntryType;
+  history_key: string;
   created_at: string;
   filter_type: FilterType;
+  source_mode: HistorySourceMode;
+}
+
+export interface OptimizationHistorySummary extends HistoryBase {
+  entry_type: 'optimization';
   metric_type: MetricType;
   best_cost: number;
   metric_used: string;
-  algorithm?: AlgorithmType;
+  algorithm?: AlgorithmType | null;
+  source_mode: ConfigMode;
 }
 
-export interface HistoryDetail extends HistorySummary {
+export interface ExperimentalHistorySummary extends HistoryBase {
+  entry_type: 'experimental';
+  metric_type: null;
+  best_cost: null;
+  metric_used: null;
+  algorithm: null;
+  source_mode: 'experimental';
+}
+
+export type HistorySummary = OptimizationHistorySummary | ExperimentalHistorySummary;
+
+export interface OptimizationHistoryDetail extends OptimizationHistorySummary {
   noise_type: NoiseType;
   noise_sigma: number;
   noise_amount: number;
   population: number;
   iterations: number;
   seed: number | null;
-  algorithm?: AlgorithmType;
+  config_mode?: ConfigMode;
   params: Record<string, number>;
   metrics: ResultMetrics;
   convergence: number[];
@@ -108,4 +129,18 @@ export interface HistoryDetail extends HistorySummary {
   noisy_image: string | null;
   result_image: string | null;
   duration_ms: number | null;
+}
+
+export interface ExperimentalHistoryDetail extends ExperimentalHistorySummary {
+  params: Record<string, number>;
+  input_image: string | null;
+  result_image: string | null;
+  duration_ms: number | null;
+}
+
+export type HistoryDetail = OptimizationHistoryDetail | ExperimentalHistoryDetail;
+
+export interface ExperimentalConfig {
+  filterType: FilterType;
+  params: Record<string, number>;
 }
