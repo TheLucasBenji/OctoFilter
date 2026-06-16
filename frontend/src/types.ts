@@ -1,7 +1,7 @@
 export type FilterType = 'bilateral' | 'anisotropic' | 'nlmeans';
 export type MetricType = 'mse' | 'snr' | 'piqe';
 export type NoiseType = 'gaussian' | 'sp';
-export type AlgorithmType = 'ooa' | 'sfoa';
+export type AlgorithmType = 'ooa' | 'sfoa' | 'aquila';
 export type ConfigMode = 'basic' | 'advanced';
 export type HistoryEntryType = 'optimization' | 'experimental';
 export type HistorySourceMode = ConfigMode | 'experimental';

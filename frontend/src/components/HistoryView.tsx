@@ -5,6 +5,8 @@ import Modal from './Modal';
 import PdfExportButton from './PdfExportButton';
 import { FILTER_LABELS, exportReportPdf, historyDetailToReport } from '../utils/pdfReport';
 
+const ALGORITHM_ABBR: Record<string, string> = { ooa: 'OOA', sfoa: 'SFOA', aquila: 'AO' };
+
 interface Props {
   apiBase: string;
   onLoadConfig: (detail: HistoryDetail) => void;
@@ -112,7 +114,9 @@ export default function HistoryView({ apiBase, onLoadConfig, onAuthExpired, onBa
               <tr key={item.history_key} className="history-row">
                 <td className="history-date">{new Date(item.created_at).toLocaleString('es-CL')}</td>
                 <td className="history-kind">
-                  {item.entry_type === 'optimization' ? (item.algorithm ?? 'ooa').toUpperCase() : 'Manual'}
+                  {item.entry_type === 'optimization'
+                    ? (ALGORITHM_ABBR[item.algorithm ?? 'ooa'] ?? (item.algorithm ?? 'ooa').toUpperCase())
+                    : 'Manual'}
                 </td>
                 <td className="history-mode">
                   {item.source_mode === 'experimental' ? 'Experimental' : item.source_mode === 'basic' ? 'Básico' : 'Avanzado'}
