@@ -4,19 +4,22 @@ Este repositorio contiene una implementación en Python del **Octopus Optimizati
 Algorithm (OOA)** aplicada a la optimización automática de parámetros de filtros
 de imagen. El proyecto ha evolucionado desde una herramienta CLI hacia una
 aplicación full-stack con API y una interfaz web interactiva. Además del OOA,
-la app incluye el **Starfish Optimization Algorithm (SFOA)** como algoritmo
-alternativo seleccionable desde la interfaz.
+la app incluye el **Starfish Optimization Algorithm (SFOA)** y el
+**Aquila Optimizer (AO)** como algoritmos alternativos seleccionables desde la
+interfaz.
 
 **Referencias**:
 - [Repositorio original de OOA](https://github.com/Chrisong-gh/MOOA)
 - [Repositorio original de SFOA](https://es.mathworks.com/matlabcentral/fileexchange/173735-starfish-optimization-algorithm-sfoa)
+- [Código original de Aquila Optimizer](https://www.mathworks.com/matlabcentral/fileexchange/89381-aquila-optimizer-a-meta-heuristic-optimization-algorithm)
 
 ---
 
 - Interfaz web (frontend) desarrollada con React + Vite en `frontend/`.
 - API backend con `FastAPI` en `backend/main.py` que expone endpoints para
   previsualizar ruido y lanzar optimizaciones.
-- Selección de algoritmo desde la UI: **OOA** (Octopus) o **SFOA** (Starfish).
+- Selección de algoritmo desde la UI: **OOA** (Octopus), **SFOA** (Starfish) o
+  **AO** (Aquila).
 - Script `run.sh` para arrancar backend y frontend simultáneamente.
 - Documentación legacy del CLI movida a [backend/README.md](backend/README.md).
 
@@ -75,7 +78,7 @@ npm run dev
 
 - `backend/` — API FastAPI, filtros y lógica de optimización.
 - `frontend/` — Interfaz web en React + Vite.
-- `filters/`, `imaging/`, `ooa/`, `sfoa/`, `visualization/` — módulos de procesamiento.
+- `filters/`, `imaging/`, `ooa/`, `sfoa/`, `aquila/`, `visualization/` — módulos de procesamiento.
 - `requirements.txt` — dependencias de Python.
 - `run.sh` — script para arrancar backend y frontend.
 
@@ -113,5 +116,5 @@ El backend expone varios endpoints (ver documentación automática):
 - `POST /api/auth/logout` — revoca la sesión actual.
 - `GET /api/filters` — lista filtros y parámetros.
 - `POST /api/preview-noise` — genera una imagen con ruido de ejemplo.
-- `POST /api/optimize` — inicia una optimización (retorna `job_id`). Acepta el parámetro `algorithm`: `ooa` (default) o `sfoa`.
+- `POST /api/optimize` — inicia una optimización (retorna `job_id`). Acepta el parámetro `algorithm`: `ooa` (default), `sfoa` o `aquila`.
 - `GET /api/optimize/{job_id}/stream` — stream SSE con progreso y resultado.

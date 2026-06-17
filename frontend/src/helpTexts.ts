@@ -13,6 +13,8 @@ export const TERM_HELP = {
     'Octopus Optimization Algorithm: metaheurística que prueba soluciones candidatas y conserva las mejores.',
   sfoa:
     'Starfish Optimization Algorithm: metaheurística inspirada en la estrella de mar. Alterna exploración con patrones de búsqueda multi-dimensional y explotación mediante cinco brazos virtuales, más una fase de regeneración.',
+  aquila:
+    'Aquila Optimizer: metaheurística inspirada en el comportamiento de caza del águila. Combina vuelo de alto vuelo (exploración amplia con espiral), vuelo de contorno (búsqueda con vuelos de Lévy), descenso vertical (explotación) y caminata aleatoria (explotación fina).',
   convergence:
     'Evolución del mejor costo encontrado por el algoritmo durante la optimización.',
   cost:
@@ -54,6 +56,8 @@ export const ALGORITHM_HELP: Record<AlgorithmType, string> = {
     'Octopus Optimization Algorithm: divide la población en cabezas, tentáculos y exploradores que combinan explotación con vuelos de Lévy.',
   sfoa:
     'Starfish Optimization Algorithm: alterna exploración multi-dimensional y explotación mediante cinco brazos virtuales, con regeneración del último individuo.',
+  aquila:
+    'Aquila Optimizer: inspirado en el águila. Cuatro estrategias de caza: vuelo en espiral (exploración amplia), vuelo de contorno con Lévy (exploración estrecha), descenso vertical (explotación amplia) y caminata con QF (explotación fina).',
 };
 
 export const NOISE_HELP: Record<NoiseType, string> = {

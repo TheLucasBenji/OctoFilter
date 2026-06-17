@@ -34,6 +34,7 @@ from imaging import metrics as img_metrics
 from imaging import noise as img_noise
 from ooa.algorithm import ooa
 from sfoa.algorithm import sfoa
+from aquila.algorithm import aquila
 
 app = FastAPI(title="Octopus API")
 
@@ -84,11 +85,13 @@ MANUAL_PARAM_META = {
 ALGORITHMS = {
     "ooa": ooa,
     "sfoa": sfoa,
+    "aquila": aquila,
 }
 
 ALGORITHM_LABELS = {
     "ooa": "Octopus",
     "sfoa": "Starfish",
+    "aquila": "Aquila",
 }
 
 CONFIG_MODES = {"basic", "advanced"}
@@ -555,6 +558,11 @@ def _eval_counts(algorithm: str, population: int, iterations: int) -> tuple[int,
     """
     if algorithm == "sfoa":
         return 0, population * (iterations + 1)
+
+    if algorithm == "aquila":
+        # AO evalúa toda la población de forma serial: N en el escaneo inicial
+        # más N en la selección codiciosa, por cada iteración. Sin paralelismo.
+        return 0, population * 2 * iterations
 
     n_scout = population % 9
     n_head = max((population - n_scout) // 9, 1)
