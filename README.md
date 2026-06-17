@@ -78,7 +78,8 @@ npm run dev
 
 - `backend/` — API FastAPI, filtros y lógica de optimización.
 - `frontend/` — Interfaz web en React + Vite.
-- `filters/`, `imaging/`, `ooa/`, `sfoa/`, `aquila/`, `visualization/` — módulos de procesamiento.
+- `backend/filters/`, `backend/imaging/`, `backend/visualization/` — módulos de procesamiento de imágenes.
+- `backend/algorithms/ooa/`, `backend/algorithms/sfoa/`, `backend/algorithms/ao/` — implementaciones de los algoritmos de optimización.
 - `requirements.txt` — dependencias de Python.
 - `run.sh` — script para arrancar backend y frontend.
 
@@ -116,5 +117,5 @@ El backend expone varios endpoints (ver documentación automática):
 - `POST /api/auth/logout` — revoca la sesión actual.
 - `GET /api/filters` — lista filtros y parámetros.
 - `POST /api/preview-noise` — genera una imagen con ruido de ejemplo.
-- `POST /api/optimize` — inicia una optimización (retorna `job_id`). Acepta el parámetro `algorithm`: `ooa` (default), `sfoa` o `aquila`.
+- `POST /api/optimize` — inicia una optimización (retorna `job_id`). Acepta el parámetro `algorithm`: `ooa` (default), `sfoa` o `ao`. El alias legacy `aquila` se mantiene para compatibilidad.
 - `GET /api/optimize/{job_id}/stream` — stream SSE con progreso y resultado.

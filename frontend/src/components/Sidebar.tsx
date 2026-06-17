@@ -83,7 +83,7 @@ const METRICS: { value: MetricType; label: string; hint: string }[] = [
 const ALGORITHMS: { value: AlgorithmType; label: string; short: string }[] = [
   { value: 'ooa', label: 'Octopus', short: 'OOA' },
   { value: 'sfoa', label: 'Starfish', short: 'SFOA' },
-  { value: 'aquila', label: 'Aquila', short: 'AO' },
+  { value: 'ao', label: 'Aquila', short: 'AO' },
 ];
 
 function RunBlock({

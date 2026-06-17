@@ -5,7 +5,7 @@ import Modal from './Modal';
 import PdfExportButton from './PdfExportButton';
 import { FILTER_LABELS, exportReportPdf, historyDetailToReport } from '../utils/pdfReport';
 
-const ALGORITHM_ABBR: Record<string, string> = { ooa: 'OOA', sfoa: 'SFOA', aquila: 'AO' };
+const ALGORITHM_ABBR: Record<string, string> = { ooa: 'OOA', sfoa: 'SFOA', ao: 'AO', aquila: 'AO' };
 
 interface Props {
   apiBase: string;

@@ -32,9 +32,9 @@ import history as hist_mod
 from filters import anisotropic, bilateral, nlmeans
 from imaging import metrics as img_metrics
 from imaging import noise as img_noise
-from ooa.algorithm import ooa
-from sfoa.algorithm import sfoa
-from aquila.algorithm import aquila
+from algorithms.ao.algorithm import ao
+from algorithms.ooa.algorithm import ooa
+from algorithms.sfoa.algorithm import sfoa
 
 app = FastAPI(title="Octopus API")
 
@@ -85,14 +85,23 @@ MANUAL_PARAM_META = {
 ALGORITHMS = {
     "ooa": ooa,
     "sfoa": sfoa,
-    "aquila": aquila,
+    "ao": ao,
+    # Backwards-compatible alias for saved histories and older clients.
+    "aquila": ao,
 }
 
 ALGORITHM_LABELS = {
     "ooa": "Octopus",
     "sfoa": "Starfish",
+    "ao": "Aquila",
     "aquila": "Aquila",
 }
+
+
+def _canonical_algorithm(algorithm: str) -> str:
+    if algorithm == "aquila":
+        return "ao"
+    return algorithm
 
 CONFIG_MODES = {"basic", "advanced"}
 HISTORY_ENTRY_TYPES = {"optimization", "experimental"}
@@ -559,7 +568,7 @@ def _eval_counts(algorithm: str, population: int, iterations: int) -> tuple[int,
     if algorithm == "sfoa":
         return 0, population * (iterations + 1)
 
-    if algorithm == "aquila":
+    if algorithm in {"ao", "aquila"}:
         # AO evalúa toda la población de forma serial: N en el escaneo inicial
         # más N en la selección codiciosa, por cada iteración. Sin paralelismo.
         return 0, population * 2 * iterations
@@ -674,6 +683,7 @@ async def estimate_runtime(
         raise HTTPException(400, "iterations debe estar entre 1 y 500")
     if algorithm not in ALGORITHMS:
         raise HTTPException(400, f"algorithm inválido: '{algorithm}'")
+    algorithm = _canonical_algorithm(algorithm)
 
     loop = asyncio.get_running_loop()
     return await loop.run_in_executor(
@@ -721,6 +731,7 @@ async def start_optimize(
         raise HTTPException(400, "noise_amount debe estar entre 0 y 1")
     if algorithm not in ALGORITHMS:
         raise HTTPException(400, f"algorithm inválido: '{algorithm}'")
+    algorithm = _canonical_algorithm(algorithm)
     if config_mode not in CONFIG_MODES:
         raise HTTPException(400, f"config_mode inválido: '{config_mode}'")
 

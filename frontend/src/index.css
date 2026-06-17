@@ -34,7 +34,7 @@
   /* Algorithm-specific fixed colors */
   --ooa: #5b3df5;
   --sfoa: #ff7c35;
-  --aquila: #ffd700;
+  --ao: #ffd700;
 
   /* Status */
   --green: #248c62;
@@ -89,7 +89,7 @@ html[data-theme='dark'] {
   /* Algorithm-specific fixed colors (dark) */
   --ooa: #8a76ff;
   --sfoa: #b15a2d;
-  --aquila: #b8960c;
+  --ao: #b8960c;
 
   --green: #3dad82;
   --green-dim: rgba(61, 173, 130, 0.12);
@@ -128,17 +128,17 @@ html[data-theme='dark'][data-algorithm='sfoa'] {
 }
 
 /* ── Aquila palette override (light) ───────────────────────────────── */
-html[data-algorithm='aquila'] {
+html[data-algorithm='ao'] {
   --a: #d4a017;
   --a-dim: rgba(255, 215, 0, 0.13);
   --a-glo: rgba(255, 215, 0, 0.28);
   --a-hi: #ffd700;
   --hover: #fffdf0;
-  --logo-fill: radial-gradient(80% 80% at 100% 100%, var(--aquila) 0%, var(--ooa) 120%);
+  --logo-fill: radial-gradient(80% 80% at 100% 100%, var(--ao) 0%, var(--ooa) 120%);
 }
 
 /* ── Aquila palette override (dark) ────────────────────────────────── */
-html[data-theme='dark'][data-algorithm='aquila'] {
+html[data-theme='dark'][data-algorithm='ao'] {
   --a: #b8960c;
   --a-dim: rgba(184, 150, 12, 0.15);
   --a-glo: rgba(184, 150, 12, 0.32);

@@ -2,6 +2,7 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import { FiLogOut } from 'react-icons/fi';
 import { AiTwotoneExperiment } from 'react-icons/ai';
 import {
+  AlgorithmType,
   AuthUser,
   AppParams,
   AppState,
@@ -37,6 +38,12 @@ const DEFAULT_PARAMS: AppParams = {
   seed: '',
   algorithm: 'ooa',
 };
+
+function normalizeAlgorithm(value: string | null | undefined): AlgorithmType {
+  if (value === 'aquila') return 'ao';
+  if (value === 'sfoa' || value === 'ao') return value;
+  return 'ooa';
+}
 
 const THEME_STORAGE_KEY = 'octopus-theme';
 type AuthStatus = 'checking' | 'authenticated' | 'anonymous';
@@ -509,7 +516,7 @@ export default function App() {
       population: detail.population,
       iterations: detail.iterations,
       seed: detail.seed !== null ? String(detail.seed) : '',
-      algorithm: detail.algorithm ?? 'ooa',
+      algorithm: normalizeAlgorithm(detail.algorithm),
     });
     setConfigMode(detail.source_mode === 'basic' ? 'basic' : 'advanced');
     setView('workspace');

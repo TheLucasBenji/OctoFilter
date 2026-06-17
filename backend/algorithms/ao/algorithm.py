@@ -9,7 +9,7 @@ Referencia: Abualigah, L. et al. (2021). Aquila Optimizer: A novel
             https://doi.org/10.1016/j.cie.2021.107250
 Código MATLAB original:
             https://www.mathworks.com/matlabcentral/fileexchange/89381-aquila-optimizer-a-meta-heuristic-optimization-algorithm
-Licencia: ver backend/aquila/LICENSE.
+Licencia: ver backend/algorithms/ao/LICENSE.
 
 Esta implementación es una traducción directa del código MATLAB original
 (AO.m + initialization.m, versión 0.2, marzo 2021).
@@ -53,7 +53,7 @@ def _levy(dim: int, rng: np.random.Generator) -> np.ndarray:
     return u / (np.abs(v) ** (1 / beta))   # step = u./abs(v).^(1/beta)
 
 
-def aquila(
+def ao(
     n_population: int,
     max_iter: int,
     lb: np.ndarray,
@@ -208,3 +208,7 @@ def aquila(
             on_iteration(t - 1, best_cost, best_pos)
 
     return best_cost, best_pos, convergence
+
+
+# Backwards-compatible symbol for older imports.
+aquila = ao

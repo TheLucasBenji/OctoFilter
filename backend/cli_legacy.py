@@ -27,7 +27,7 @@ from skimage.restoration import estimate_sigma
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from ooa.algorithm import ooa
+from algorithms.ooa.algorithm import ooa
 from imaging.noise import add_gaussian_noise, add_salt_and_pepper_noise
 from imaging.metrics import mse, snr, piqe
 from filters import bilateral, anisotropic, nlmeans

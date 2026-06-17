@@ -1,7 +1,8 @@
 export type FilterType = 'bilateral' | 'anisotropic' | 'nlmeans';
 export type MetricType = 'mse' | 'snr' | 'piqe';
 export type NoiseType = 'gaussian' | 'sp';
-export type AlgorithmType = 'ooa' | 'sfoa' | 'aquila';
+export type AlgorithmType = 'ooa' | 'sfoa' | 'ao';
+export type LegacyAlgorithmType = 'aquila';
 export type ConfigMode = 'basic' | 'advanced';
 export type HistoryEntryType = 'optimization' | 'experimental';
 export type HistorySourceMode = ConfigMode | 'experimental';
@@ -99,7 +100,7 @@ export interface OptimizationHistorySummary extends HistoryBase {
   metric_type: MetricType;
   best_cost: number;
   metric_used: string;
-  algorithm?: AlgorithmType | null;
+  algorithm?: AlgorithmType | LegacyAlgorithmType | null;
   source_mode: ConfigMode;
 }
 
