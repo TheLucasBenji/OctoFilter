@@ -697,6 +697,7 @@ export default function App() {
                             exportReportPdf({
                               filterType: params.filterType,
                               metricType: params.metricType,
+                              algorithm: params.algorithm,
                               noiseType: params.noiseType,
                               noiseSigma: params.noiseSigma,
                               noiseAmount: params.noiseAmount,

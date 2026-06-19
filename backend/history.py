@@ -1,20 +1,31 @@
 import base64
 import json
+import os
 import shutil
 from pathlib import Path
 from typing import Optional
 
 from auth import connect, now_iso
 
-HISTORY_ROOT = Path(__file__).parent / "data" / "history"
-EXPERIMENTAL_ROOT = HISTORY_ROOT / "experimental"
+DEFAULT_HISTORY_ROOT = Path(__file__).parent / "data" / "history"
+
+
+def get_history_root() -> Path:
+    configured = os.environ.get("OCTOPUS_HISTORY_ROOT")
+    if configured:
+        return Path(configured).expanduser()
+    return DEFAULT_HISTORY_ROOT
+
+
+def get_experimental_root() -> Path:
+    return get_history_root() / "experimental"
 
 
 def _read_image(path_str: Optional[str]) -> Optional[str]:
     if not path_str:
         return None
 
-    img_path = HISTORY_ROOT / path_str
+    img_path = get_history_root() / path_str
     if not img_path.exists():
         return None
 
@@ -71,7 +82,7 @@ def save_optimization(
         )
         opt_id = cur.lastrowid
 
-    entry_dir = HISTORY_ROOT / str(opt_id)
+    entry_dir = get_history_root() / str(opt_id)
     paths = _write_entry_images(entry_dir, Path(str(opt_id)), images)
 
     with connect() as conn:
@@ -111,7 +122,7 @@ def save_experimental_run(
         )
         run_id = cur.lastrowid
 
-    entry_dir = EXPERIMENTAL_ROOT / str(run_id)
+    entry_dir = get_experimental_root() / str(run_id)
     stored_dir = Path("experimental") / str(run_id)
     paths = _write_entry_images(entry_dir, stored_dir, images)
 
@@ -259,7 +270,7 @@ def delete_optimization(user_id: int, opt_id: int) -> bool:
         deleted = cur.rowcount > 0
 
     if deleted:
-        shutil.rmtree(HISTORY_ROOT / str(opt_id), ignore_errors=True)
+        shutil.rmtree(get_history_root() / str(opt_id), ignore_errors=True)
 
     return deleted
 
@@ -273,7 +284,7 @@ def delete_experimental_run(user_id: int, run_id: int) -> bool:
         deleted = cur.rowcount > 0
 
     if deleted:
-        shutil.rmtree(EXPERIMENTAL_ROOT / str(run_id), ignore_errors=True)
+        shutil.rmtree(get_experimental_root() / str(run_id), ignore_errors=True)
 
     return deleted
 

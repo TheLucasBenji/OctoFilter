@@ -1,5 +1,13 @@
 import { jsPDF } from 'jspdf';
-import { FilterType, MetricType, NoiseType, OptimizationHistoryDetail, ResultMetrics } from '../types';
+import {
+  AlgorithmType,
+  FilterType,
+  LegacyAlgorithmType,
+  MetricType,
+  NoiseType,
+  OptimizationHistoryDetail,
+  ResultMetrics,
+} from '../types';
 import { getParamDisplayInfo } from '../paramMetadata';
 
 export const FILTER_LABELS: Record<FilterType, string> = {
@@ -19,9 +27,17 @@ const NOISE_LABELS: Record<NoiseType, string> = {
   sp: 'Sal y pimienta',
 };
 
+const ALGORITHM_LABELS: Record<AlgorithmType | LegacyAlgorithmType, string> = {
+  ooa: 'OOA',
+  sfoa: 'SFOA',
+  ao: 'AO',
+  aquila: 'AO',
+};
+
 export interface ReportData {
   filterType: FilterType;
   metricType: MetricType;
+  algorithm?: AlgorithmType | LegacyAlgorithmType | null;
   createdAt?: string;
   durationMs?: number | null;
   noiseType: NoiseType;
@@ -42,6 +58,7 @@ export function historyDetailToReport(d: OptimizationHistoryDetail): ReportData 
   return {
     filterType: d.filter_type,
     metricType: d.metric_type,
+    algorithm: d.algorithm,
     createdAt: d.created_at,
     durationMs: d.duration_ms,
     noiseType: d.noise_type,
@@ -94,6 +111,10 @@ function getPdfParamLabel(filterType: FilterType, name: string): string {
   return labels[info.key] ?? info.commonName ?? name;
 }
 
+function getAlgorithmLabel(algorithm?: AlgorithmType | LegacyAlgorithmType | null): string {
+  return algorithm ? (ALGORITHM_LABELS[algorithm] ?? algorithm.toUpperCase()) : 'OOA';
+}
+
 export async function exportReportPdf(report: ReportData): Promise<void> {
   const doc = new jsPDF({ unit: 'pt', format: 'a4' });
   const PW = 595.28;
@@ -135,10 +156,11 @@ export async function exportReportPdf(report: ReportData): Promise<void> {
   y += 14;
 
   const filterLabel = FILTER_LABELS[report.filterType] ?? report.filterType;
+  const algorithmLabel = getAlgorithmLabel(report.algorithm);
   const dateStr = report.createdAt
     ? new Date(report.createdAt).toLocaleString('es-CL')
     : new Date().toLocaleString('es-CL');
-  let meta = `${filterLabel} · ${report.metricType.toUpperCase()} · ${dateStr}`;
+  let meta = `${filterLabel} · ${algorithmLabel} · ${report.metricType.toUpperCase()} · ${dateStr}`;
   if (report.durationMs != null) meta += ` · ${(report.durationMs / 1000).toFixed(1)}s`;
   txt(meta, ML, y, 9, false, T2);
   y += 18;
@@ -153,6 +175,7 @@ export async function exportReportPdf(report: ReportData): Promise<void> {
   const seedStr = (report.seed != null && report.seed !== '') ? String(report.seed) : 'aleatorio';
   const cfg: [string, string][] = [
     ['Filtro',      filterLabel],
+    ['Algoritmo',   algorithmLabel],
     ['Métrica',     report.metricType.toUpperCase()],
     ['Ruido',       report.noiseType === 'gaussian'
                       ? `${noiseLabel} (sigma=${report.noiseSigma})`
