@@ -172,6 +172,19 @@ def list_history(user_id: int, limit: int = 50, offset: int = 0) -> list:
     return [dict(r) for r in rows]
 
 
+def count_history(user_id: int) -> int:
+    with connect() as conn:
+        row = conn.execute(
+            """
+            SELECT
+                (SELECT COUNT(*) FROM optimizations WHERE user_id = ?) +
+                (SELECT COUNT(*) FROM experimental_runs WHERE user_id = ?) AS total
+            """,
+            (user_id, user_id),
+        ).fetchone()
+    return int(row["total"] if row is not None else 0)
+
+
 def list_optimizations(user_id: int, limit: int = 50, offset: int = 0) -> list:
     with connect() as conn:
         rows = conn.execute(

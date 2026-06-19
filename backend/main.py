@@ -839,6 +839,11 @@ def list_history(
     return hist_mod.list_history(user["id"], limit=limit, offset=offset)
 
 
+@app.get("/api/history/count")
+def count_history(user: dict = Depends(require_user)):
+    return {"total": hist_mod.count_history(user["id"])}
+
+
 @app.get("/api/history/{entry_type}/{entry_id}")
 def get_history_entry(entry_type: str, entry_id: int, user: dict = Depends(require_user)):
     if entry_type not in HISTORY_ENTRY_TYPES:
