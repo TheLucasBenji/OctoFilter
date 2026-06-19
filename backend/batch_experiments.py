@@ -15,6 +15,7 @@ import math
 import os
 import sys
 import time
+from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -34,11 +35,15 @@ from imaging import noise as img_noise
 from main import ALGORITHMS, FILTER_LABELS, FILTER_MODULES, _adjusted_bounds, _canonical_algorithm
 
 
-DEFAULT_IMAGES = ["cere.png", "woody.png", "1366_2000.jpg"]
+DEFAULT_IMAGES = ["lena.png", "cameraman.png", "barbara.png"]
 DEFAULT_NOISE = ["gaussian:15", "gaussian:35"]
 DEFAULT_FILTERS = ["bilateral", "anisotropic", "nlmeans"]
 DEFAULT_METRICS = ["snr", "piqe"]
 DEFAULT_ALGORITHMS = ["ooa", "sfoa", "ao"]
+DEFAULT_POPULATION = 10
+DEFAULT_ITERATIONS = 10
+DEFAULT_REPETITIONS = 10
+DEFAULT_SEED = 20260615
 
 ALGORITHM_LABELS = {
     "ooa": "OOA",
@@ -50,6 +55,8 @@ ALGORITHM_LABELS = {
 SUMMARY_FIELDS = [
     "run_index",
     "status",
+    "repetition",
+    "saved_to_history",
     "history_id",
     "image",
     "filter",
@@ -77,6 +84,41 @@ SUMMARY_FIELDS = [
     "history_noisy_path",
     "history_result_path",
     "error",
+]
+
+AVERAGE_FIELDS = [
+    "filter",
+    "image",
+    "noise",
+    "noise_type",
+    "noise_sigma",
+    "noise_amount",
+    "metric",
+    "algorithm",
+    "population",
+    "iterations",
+    "repetitions",
+    "history_ids",
+    "duration_ms_mean",
+    "duration_ms_std",
+    "best_cost_mean",
+    "best_cost_std",
+    "noisy_snr_mean",
+    "noisy_snr_std",
+    "snr_mean",
+    "snr_std",
+    "noisy_piqe_mean",
+    "noisy_piqe_std",
+    "piqe_mean",
+    "piqe_std",
+    "noisy_mse_mean",
+    "noisy_mse_std",
+    "mse_mean",
+    "mse_std",
+    "improvement_value_mean",
+    "improvement_value_std",
+    "improvement_percent_mean",
+    "improvement_percent_std",
 ]
 
 
@@ -141,6 +183,62 @@ def bounded_int(label: str, minimum: int, maximum: int):
     return parse
 
 
+def odd_count(low: int, high: int) -> int:
+    return sum(1 for value in range(low, high + 1) if value % 2 == 1)
+
+
+def search_space_size(filter_type: str) -> int:
+    if filter_type == "bilateral":
+        d_count = odd_count(3, 15)
+        sigma_color_count = 200 - 10 + 1
+        sigma_space_count = 200 - 10 + 1
+        return d_count * sigma_color_count * sigma_space_count
+
+    if filter_type == "anisotropic":
+        niter_count = 50 - 5 + 1
+        kappa_count = 100 - 10 + 1
+        gamma_count = int(round((0.25 - 0.05) / 0.01)) + 1
+        option_count = 2
+        return niter_count * kappa_count * gamma_count * option_count
+
+    if filter_type == "nlmeans":
+        h_count = 30 - 1 + 1
+        total = 0
+        for template in range(3, 11 + 1, 2):
+            for search in range(7, 35 + 1, 2):
+                if search >= template + 2:
+                    total += h_count
+        return total
+
+    raise ValueError(f"No hay discretizacion configurada para el filtro '{filter_type}'")
+
+
+def validate_search_budget(filters: list[str], population: int, iterations: int) -> list[str]:
+    budget = population * iterations
+    warnings: list[str] = []
+    errors: list[str] = []
+
+    for filter_type in filters:
+        space = search_space_size(filter_type)
+        ratio = budget / space
+        percent = ratio * 100.0
+        if ratio > 0.10:
+            errors.append(
+                f"{filter_type}: population*iterations={budget} equivale a {percent:.2f}% "
+                f"del espacio discretizado ({space}), supera el 10%"
+            )
+        elif ratio > 0.05:
+            warnings.append(
+                f"{filter_type}: population*iterations={budget} equivale a {percent:.2f}% "
+                f"del espacio discretizado ({space}), supera el 5% ideal"
+            )
+
+    if errors:
+        raise ValueError("Presupuesto de busqueda invalido:\n- " + "\n- ".join(errors))
+
+    return warnings
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Ejecuta un batch secuencial para comparar OOA, SFOA y AO.",
@@ -149,7 +247,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--images",
         nargs="+",
         default=DEFAULT_IMAGES,
-        help="Imagenes a procesar (default: cere.png woody.png 1366_2000.jpg)",
+        help="Imagenes a procesar (default: lena.png cameraman.png barbara.png)",
     )
     parser.add_argument(
         "--noise",
@@ -181,21 +279,27 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--population",
-        required=True,
+        default=DEFAULT_POPULATION,
         type=bounded_int("population", 9, 200),
         help="Tamano de poblacion usado en todas las corridas",
     )
     parser.add_argument(
         "--iterations",
-        required=True,
+        default=DEFAULT_ITERATIONS,
         type=bounded_int("iterations", 1, 500),
         help="Numero de iteraciones usado en todas las corridas",
     )
     parser.add_argument(
+        "--repetitions",
+        default=DEFAULT_REPETITIONS,
+        type=bounded_int("repetitions", 1, 10_000),
+        help="Numero de repeticiones por combinacion",
+    )
+    parser.add_argument(
         "--seed",
         type=int,
-        default=None,
-        help="Semilla compartida para ruido y algoritmos",
+        default=DEFAULT_SEED,
+        help="Semilla base para generar repeticiones reproducibles",
     )
     parser.add_argument(
         "--user-email",
@@ -289,6 +393,10 @@ def make_noisy_image(original: np.ndarray, spec: NoiseSpec, seed: int | None) ->
     return img_noise.add_salt_and_pepper_noise(original, amount=spec.noise_amount, rng=rng)
 
 
+def repetition_seed(base_seed: int, image_index: int, noise_index: int, repetition: int) -> int:
+    return base_seed + image_index * 100_000 + noise_index * 10_000 + repetition
+
+
 def finite_or_none(value: Any) -> Any:
     if value is None:
         return None
@@ -379,6 +487,8 @@ def run_single_optimization(
     user_id: int,
     run_index: int,
     total_runs: int,
+    repetition: int,
+    save_to_history: bool,
     image_path: Path,
     original: np.ndarray,
     noisy: np.ndarray,
@@ -463,29 +573,42 @@ def run_single_optimization(
         "algorithm": algorithm,
         "config_mode": "advanced",
     }
-    history_id = hist_mod.save_optimization(
-        user_id,
-        params_req=params_req,
-        result_payload={
-            "metrics": metrics,
-            "params": params,
-            "convergence": convergence_values,
-        },
-        images={
-            "original": original_bytes,
-            "noisy": noisy_bytes,
-            "result": png_bytes(result_u8),
-        },
-        duration_ms=duration_ms,
-    )
-    history_paths = saved_history_paths(history_id)
+    history_id: int | None = None
+    history_paths = {
+        "created_at": None,
+        "original_path": None,
+        "noisy_path": None,
+        "result_path": None,
+        "original_abs_path": None,
+        "noisy_abs_path": None,
+        "result_abs_path": None,
+    }
+    if save_to_history:
+        history_id = hist_mod.save_optimization(
+            user_id,
+            params_req=params_req,
+            result_payload={
+                "metrics": metrics,
+                "params": params,
+                "convergence": convergence_values,
+            },
+            images={
+                "original": original_bytes,
+                "noisy": noisy_bytes,
+                "result": png_bytes(result_u8),
+            },
+            duration_ms=duration_ms,
+        )
+        history_paths = saved_history_paths(history_id)
 
     return {
         "run_index": run_index,
         "total_runs": total_runs,
         "status": "complete",
+        "repetition": repetition,
+        "saved_to_history": save_to_history,
         "history_id": history_id,
-        "history_key": f"optimization:{history_id}",
+        "history_key": f"optimization:{history_id}" if history_id is not None else None,
         "created_at": history_paths["created_at"],
         "image": {
             "path": str(image_path),
@@ -543,6 +666,8 @@ def summary_row(record: dict[str, Any]) -> dict[str, Any]:
         } | {
             "run_index": record.get("run_index", ""),
             "status": record.get("status", "error"),
+            "repetition": record.get("repetition", ""),
+            "saved_to_history": record.get("saved_to_history", ""),
             "image": record.get("image", {}).get("name", ""),
             "filter": record.get("filter", ""),
             "noise": record.get("noise", ""),
@@ -556,7 +681,9 @@ def summary_row(record: dict[str, Any]) -> dict[str, Any]:
     return {
         "run_index": record["run_index"],
         "status": record["status"],
-        "history_id": record["history_id"],
+        "repetition": record["repetition"],
+        "saved_to_history": "yes" if record["saved_to_history"] else "no",
+        "history_id": record["history_id"] if record["history_id"] is not None else "",
         "image": record["image"]["name"],
         "filter": record["filter"]["type"],
         "noise": record["noise"]["label"],
@@ -606,6 +733,163 @@ def write_runs_json(
     tmp_path.replace(path)
 
 
+def mean_std(values: list[Any]) -> tuple[float | None, float | None]:
+    numbers: list[float] = []
+    for value in values:
+        if value is None:
+            continue
+        try:
+            number = float(value)
+        except (TypeError, ValueError):
+            continue
+        if math.isfinite(number):
+            numbers.append(number)
+
+    if not numbers:
+        return None, None
+
+    mean = sum(numbers) / len(numbers)
+    if len(numbers) == 1:
+        return mean, 0.0
+
+    variance = sum((number - mean) ** 2 for number in numbers) / (len(numbers) - 1)
+    return mean, math.sqrt(variance)
+
+
+def metric_value(record: dict[str, Any], key: str) -> Any:
+    if key == "duration_ms":
+        return record.get("duration_ms")
+    if key in {"improvement_value", "improvement_percent"}:
+        return record.get(key)
+    return record.get("metrics", {}).get(key)
+
+
+def build_average_records(runs: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    grouped: dict[tuple[str, str, str, str, str], list[dict[str, Any]]] = defaultdict(list)
+
+    for run in runs:
+        if run.get("status") != "complete":
+            continue
+        key = (
+            run["filter"]["type"],
+            run["image"]["name"],
+            run["noise"]["label"],
+            run["metric"],
+            run["algorithm"],
+        )
+        grouped[key].append(run)
+
+    averages: list[dict[str, Any]] = []
+    for key in sorted(grouped):
+        rows = sorted(grouped[key], key=lambda item: item["repetition"])
+        first = rows[0]
+        record: dict[str, Any] = {
+            "filter": first["filter"]["type"],
+            "filter_label": first["filter"]["label"],
+            "image": first["image"]["name"],
+            "noise": first["noise"]["label"],
+            "noise_type": first["noise"]["type"],
+            "noise_sigma": first["noise"]["sigma"],
+            "noise_amount": first["noise"]["amount"],
+            "metric": first["metric"],
+            "algorithm": first["algorithm"],
+            "algorithm_label": first["algorithm_label"],
+            "population": first["population"],
+            "iterations": first["iterations"],
+            "repetitions": len(rows),
+            "history_ids": ";".join(
+                str(row["history_id"])
+                for row in rows
+                if row.get("history_id") is not None
+            ),
+        }
+
+        for field in (
+            "duration_ms",
+            "best_cost",
+            "noisy_snr",
+            "snr",
+            "noisy_piqe",
+            "piqe",
+            "noisy_mse",
+            "mse",
+            "improvement_value",
+            "improvement_percent",
+        ):
+            mean, std = mean_std([metric_value(row, field) for row in rows])
+            record[f"{field}_mean"] = mean
+            record[f"{field}_std"] = std
+
+        averages.append(record)
+
+    return averages
+
+
+def write_averages_csv(path: Path, averages: list[dict[str, Any]]) -> None:
+    with path.open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=AVERAGE_FIELDS)
+        writer.writeheader()
+        for record in averages:
+            writer.writerow({
+                field: finite_or_none(record.get(field, ""))
+                for field in AVERAGE_FIELDS
+            })
+
+
+def markdown_num(value: Any, decimals: int = 3) -> str:
+    if value is None:
+        return ""
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return ""
+    if not math.isfinite(number):
+        return ""
+    return f"{number:.{decimals}f}"
+
+
+def write_markdown_summary(path: Path, averages: list[dict[str, Any]], filters: list[str]) -> None:
+    lines = [
+        "# Resumen de experimentos",
+        "",
+        "Las tablas muestran promedios por filtro, imagen, ruido, metrica objetivo y algoritmo.",
+        "",
+    ]
+
+    for filter_type in filters:
+        rows = [record for record in averages if record["filter"] == filter_type]
+        if not rows:
+            continue
+
+        filter_label = FILTER_LABELS.get(filter_type, filter_type)
+        lines.extend([
+            f"## {filter_label}",
+            "",
+            "| Imagen | Ruido | Metrica | Algoritmo | Reps | MSE prom. | SNR prom. | PIQE prom. | Tiempo prom. (s) | Mejor costo prom. |",
+            "|---|---|---|---|---:|---:|---:|---:|---:|---:|",
+        ])
+        for row in rows:
+            lines.append(
+                "| "
+                + " | ".join([
+                    row["image"],
+                    row["noise"],
+                    row["metric"].upper(),
+                    row["algorithm_label"],
+                    str(row["repetitions"]),
+                    markdown_num(row["mse_mean"]),
+                    markdown_num(row["snr_mean"]),
+                    markdown_num(row["piqe_mean"]),
+                    markdown_num((row["duration_ms_mean"] or 0.0) / 1000.0, 2),
+                    markdown_num(row["best_cost_mean"]),
+                ])
+                + " |"
+            )
+        lines.append("")
+
+    path.write_text("\n".join(lines), encoding="utf-8")
+
+
 def latex_escape(value: Any) -> str:
     text = "" if value is None else str(value)
     replacements = {
@@ -647,42 +931,43 @@ def fmt_improvement(record: dict[str, Any]) -> str:
     return f"{percent:+.1f}\\%"
 
 
-def write_latex_tables(output_dir: Path, runs: list[dict[str, Any]], algorithms: list[str]) -> list[Path]:
+def write_latex_tables(output_dir: Path, averages: list[dict[str, Any]], filters: list[str]) -> list[Path]:
     latex_dir = output_dir / "latex"
     latex_dir.mkdir(parents=True, exist_ok=True)
     paths: list[Path] = []
 
-    for algorithm in algorithms:
+    for filter_type in filters:
         rows = [
-            run for run in runs
-            if run.get("status") == "complete" and run.get("algorithm") == algorithm
+            record for record in averages
+            if record.get("filter") == filter_type
         ]
-        label = ALGORITHM_LABELS.get(algorithm, algorithm.upper())
-        path = latex_dir / f"comparacion_{algorithm}.tex"
+        if not rows:
+            continue
+
+        label = FILTER_LABELS.get(filter_type, filter_type)
+        path = latex_dir / f"comparacion_{filter_type}.tex"
         lines = [
             r"\begin{table}[htbp]",
             r"\centering",
             r"\scriptsize",
             f"\\caption{{Comparacion de resultados para {latex_escape(label)}}}",
-            r"\begin{tabular}{lllllrrrrrl}",
+            r"\begin{tabular}{lllllrrrrr}",
             r"\hline",
-            r"Img & Filtro & Ruido & Obj. & Hist. & SNRa & SNRd & PIQEa & PIQEd & Mej. & t(s) \\",
+            r"Img & Ruido & Obj. & Alg. & Reps & MSE & SNR & PIQE & Costo & t(s) \\",
             r"\hline",
         ]
-        for run in rows:
-            metrics = run["metrics"]
+        for row in rows:
             cells = [
-                latex_escape(run["image"]["name"]),
-                latex_escape(run["filter"]["type"]),
-                latex_escape(run["noise"]["label"]),
-                latex_escape(run["metric"].upper()),
-                str(run["history_id"]),
-                fmt_num(metrics["noisy_snr"]),
-                fmt_num(metrics["snr"]),
-                fmt_num(metrics["noisy_piqe"]),
-                fmt_num(metrics["piqe"]),
-                fmt_improvement(run),
-                fmt_num(run["duration_ms"] / 1000.0, 1),
+                latex_escape(row["image"]),
+                latex_escape(row["noise"]),
+                latex_escape(row["metric"].upper()),
+                latex_escape(row["algorithm_label"]),
+                str(row["repetitions"]),
+                fmt_num(row["mse_mean"]),
+                fmt_num(row["snr_mean"]),
+                fmt_num(row["piqe_mean"]),
+                fmt_num(row["best_cost_mean"]),
+                fmt_num((row["duration_ms_mean"] or 0.0) / 1000.0, 1),
             ]
             lines.append(" & ".join(cells) + r" \\")
         lines.extend([
@@ -698,6 +983,7 @@ def write_latex_tables(output_dir: Path, runs: list[dict[str, Any]], algorithms:
 
 
 def build_config(args: argparse.Namespace, images: list[Path], algorithms: list[str], output_dir: Path) -> dict[str, Any]:
+    budget = args.population * args.iterations
     return {
         "images": [str(path) for path in images],
         "noise": [spec.label for spec in args.noise],
@@ -706,6 +992,12 @@ def build_config(args: argparse.Namespace, images: list[Path], algorithms: list[
         "algorithms": algorithms,
         "population": args.population,
         "iterations": args.iterations,
+        "repetitions": args.repetitions,
+        "budget": budget,
+        "search_spaces": {
+            filter_type: search_space_size(filter_type)
+            for filter_type in args.filters
+        },
         "seed": args.seed,
         "user_email": args.user_email,
         "output_dir": str(output_dir),
@@ -714,114 +1006,142 @@ def build_config(args: argparse.Namespace, images: list[Path], algorithms: list[
     }
 
 
-def run_batch(args: argparse.Namespace) -> tuple[Path, Path, list[Path]]:
+def run_batch(args: argparse.Namespace) -> tuple[Path, Path, Path, Path, list[Path]]:
     output_dir = (args.output_dir or default_output_dir()).expanduser().resolve()
     logger = setup_logging(output_dir)
     summary_path = output_dir / "summary.csv"
+    averages_path = output_dir / "averages.csv"
+    markdown_path = output_dir / "summary.md"
     runs_path = output_dir / "runs.json"
     init_summary_csv(summary_path)
 
     images = [resolve_image_path(value) for value in args.images]
     algorithms = canonical_algorithms(args.algorithms)
+    budget_warnings = validate_search_budget(args.filters, args.population, args.iterations)
     user_id = get_user_id(args.user_email)
-    total_runs = len(images) * len(args.noise) * len(args.filters) * len(args.metrics) * len(algorithms)
+    total_runs = (
+        len(images)
+        * len(args.noise)
+        * len(args.filters)
+        * len(args.metrics)
+        * len(algorithms)
+        * args.repetitions
+    )
+    total_history_saves = total_runs // args.repetitions
     config = build_config(args, images, algorithms, output_dir)
     runs: list[dict[str, Any]] = []
 
     logger.info("Batch iniciado: %s corridas secuenciales", total_runs)
+    logger.info("Entradas a guardar en historial: %s", total_history_saves)
     logger.info("Salida: %s", output_dir)
     logger.info("Historial: %s", hist_mod.get_history_root())
+    for warning in budget_warnings:
+        logger.warning("Advertencia de presupuesto: %s", warning)
     write_runs_json(runs_path, status="running", config=config, runs=runs)
 
     run_index = 0
-    for image_path in images:
+    for image_index, image_path in enumerate(images):
         original = cv2.imread(str(image_path), cv2.IMREAD_GRAYSCALE)
         if original is None:
             raise RuntimeError(f"No se pudo cargar la imagen: {image_path}")
         original_bytes = png_bytes(original)
 
-        for noise_spec in args.noise:
-            noisy = make_noisy_image(original, noise_spec, args.seed)
-            noisy_bytes = png_bytes(noisy)
-
+        for noise_index, noise_spec in enumerate(args.noise):
             for filter_type in args.filters:
                 for metric in args.metrics:
                     for algorithm in algorithms:
-                        run_index += 1
-                        logger.info(
-                            "[%d/%d] %s | %s | %s | %s | %s",
-                            run_index,
-                            total_runs,
-                            image_path.name,
-                            noise_spec.label,
-                            filter_type,
-                            metric.upper(),
-                            ALGORITHM_LABELS.get(algorithm, algorithm.upper()),
-                        )
-                        try:
-                            record = run_single_optimization(
-                                user_id=user_id,
-                                run_index=run_index,
-                                total_runs=total_runs,
-                                image_path=image_path,
-                                original=original,
-                                noisy=noisy,
-                                original_bytes=original_bytes,
-                                noisy_bytes=noisy_bytes,
-                                noise_spec=noise_spec,
-                                filter_type=filter_type,
-                                metric=metric,
-                                algorithm=algorithm,
-                                population=args.population,
-                                iterations=args.iterations,
-                                seed=args.seed,
-                            )
-                            runs.append(record)
-                            append_summary_csv(summary_path, record)
-                            write_runs_json(runs_path, status="running", config=config, runs=runs)
+                        for repetition in range(1, args.repetitions + 1):
+                            run_index += 1
+                            seed = repetition_seed(args.seed, image_index, noise_index, repetition)
+                            noisy = make_noisy_image(original, noise_spec, seed)
+                            noisy_bytes = png_bytes(noisy)
+                            save_to_history = repetition == 1
                             logger.info(
-                                "  listo history_id=%s duracion=%.1fs SNR %.2f->%.2f PIQE %s->%s",
-                                record["history_id"],
-                                record["duration_ms"] / 1000.0,
-                                record["metrics"]["noisy_snr"],
-                                record["metrics"]["snr"],
-                                fmt_num(record["metrics"]["noisy_piqe"]),
-                                fmt_num(record["metrics"]["piqe"]),
+                                "[%d/%d] %s | %s | %s | %s | %s | rep %d/%d",
+                                run_index,
+                                total_runs,
+                                image_path.name,
+                                noise_spec.label,
+                                filter_type,
+                                metric.upper(),
+                                ALGORITHM_LABELS.get(algorithm, algorithm.upper()),
+                                repetition,
+                                args.repetitions,
                             )
-                        except Exception as exc:
-                            error_record = {
-                                "run_index": run_index,
-                                "total_runs": total_runs,
-                                "status": "error",
-                                "image": {"path": str(image_path), "name": image_path.name},
-                                "filter": filter_type,
-                                "noise": noise_spec.label,
-                                "metric": metric,
-                                "algorithm": algorithm,
-                                "error": str(exc),
-                            }
-                            runs.append(error_record)
-                            append_summary_csv(summary_path, error_record)
-                            write_runs_json(runs_path, status="error", config=config, runs=runs)
-                            logger.exception("  fallo la corrida")
-                            if not args.continue_on_error:
-                                raise
+                            try:
+                                record = run_single_optimization(
+                                    user_id=user_id,
+                                    run_index=run_index,
+                                    total_runs=total_runs,
+                                    repetition=repetition,
+                                    save_to_history=save_to_history,
+                                    image_path=image_path,
+                                    original=original,
+                                    noisy=noisy,
+                                    original_bytes=original_bytes,
+                                    noisy_bytes=noisy_bytes,
+                                    noise_spec=noise_spec,
+                                    filter_type=filter_type,
+                                    metric=metric,
+                                    algorithm=algorithm,
+                                    population=args.population,
+                                    iterations=args.iterations,
+                                    seed=seed,
+                                )
+                                runs.append(record)
+                                append_summary_csv(summary_path, record)
+                                write_runs_json(runs_path, status="running", config=config, runs=runs)
+                                logger.info(
+                                    "  listo history_id=%s guardado=%s duracion=%.1fs SNR %.2f->%.2f PIQE %s->%s",
+                                    record["history_id"] if record["history_id"] is not None else "-",
+                                    "si" if record["saved_to_history"] else "no",
+                                    record["duration_ms"] / 1000.0,
+                                    record["metrics"]["noisy_snr"],
+                                    record["metrics"]["snr"],
+                                    fmt_num(record["metrics"]["noisy_piqe"]),
+                                    fmt_num(record["metrics"]["piqe"]),
+                                )
+                            except Exception as exc:
+                                error_record = {
+                                    "run_index": run_index,
+                                    "total_runs": total_runs,
+                                    "status": "error",
+                                    "repetition": repetition,
+                                    "saved_to_history": False,
+                                    "image": {"path": str(image_path), "name": image_path.name},
+                                    "filter": filter_type,
+                                    "noise": noise_spec.label,
+                                    "metric": metric,
+                                    "algorithm": algorithm,
+                                    "error": str(exc),
+                                }
+                                runs.append(error_record)
+                                append_summary_csv(summary_path, error_record)
+                                write_runs_json(runs_path, status="error", config=config, runs=runs)
+                                logger.exception("  fallo la corrida")
+                                if not args.continue_on_error:
+                                    raise
 
-    latex_paths = write_latex_tables(output_dir, runs, algorithms)
+    averages = build_average_records(runs)
+    write_averages_csv(averages_path, averages)
+    write_markdown_summary(markdown_path, averages, args.filters)
+    latex_paths = write_latex_tables(output_dir, averages, args.filters)
     write_runs_json(runs_path, status="complete", config=config, runs=runs)
     logger.info("Batch completado")
     logger.info("CSV: %s", summary_path)
+    logger.info("Promedios CSV: %s", averages_path)
+    logger.info("Markdown: %s", markdown_path)
     logger.info("JSON: %s", runs_path)
     for path in latex_paths:
         logger.info("LaTeX: %s", path)
 
-    return summary_path, runs_path, latex_paths
+    return summary_path, averages_path, markdown_path, runs_path, latex_paths
 
 
 def main() -> int:
     args = build_parser().parse_args()
     try:
-        summary_path, runs_path, latex_paths = run_batch(args)
+        summary_path, averages_path, markdown_path, runs_path, latex_paths = run_batch(args)
     except KeyboardInterrupt:
         print("\nBatch interrumpido por el usuario.", file=sys.stderr)
         return 130
@@ -830,8 +1150,10 @@ def main() -> int:
         return 1
 
     print("\nArchivos generados:")
-    print(f"  summary.csv: {summary_path}")
-    print(f"  runs.json:   {runs_path}")
+    print(f"  summary.csv:  {summary_path}")
+    print(f"  averages.csv: {averages_path}")
+    print(f"  summary.md:   {markdown_path}")
+    print(f"  runs.json:    {runs_path}")
     for path in latex_paths:
         print(f"  latex:       {path}")
     return 0

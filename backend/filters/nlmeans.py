@@ -52,13 +52,30 @@ PARAM_METADATA = [
 ]
 
 
-def _odd_int(val: float, min_val: int = 1) -> int:
+def _finite_float(val: float, fallback: float) -> float:
+    try:
+        number = float(val)
+    except (TypeError, ValueError):
+        return fallback
+    return number if np.isfinite(number) else fallback
+
+
+def _odd_int(val: float, min_val: int = 1, max_val: int | None = None) -> int:
     """Convierte un valor continuo a un entero impar válido para OpenCV."""
-    v = int(round(val))
+    number = _finite_float(val, float(min_val))
+    if max_val is not None:
+        number = float(np.clip(number, min_val, max_val))
+
+    v = int(round(number))
     if v < min_val:
         v = min_val
+    if max_val is not None and v > max_val:
+        v = max_val
     if v % 2 == 0:
-        v += 1
+        if max_val is not None and v + 1 > max_val:
+            v -= 1
+        else:
+            v += 1
     return v
 
 
@@ -78,9 +95,9 @@ def apply(image: np.ndarray, params: np.ndarray) -> np.ndarray:
     np.ndarray
         Imagen filtrada (uint8, mismo tamaño que la entrada).
     """
-    h = float(np.clip(params[0], 0.1, None))
-    template = _odd_int(params[1], min_val=3)
-    search = _odd_int(params[2], min_val=template + 2)
+    h = float(np.clip(_finite_float(params[0], LOWER_BOUNDS[0]), LOWER_BOUNDS[0], UPPER_BOUNDS[0]))
+    template = _odd_int(params[1], min_val=3, max_val=int(UPPER_BOUNDS[1]))
+    search = _odd_int(params[2], min_val=template + 2, max_val=int(UPPER_BOUNDS[2]))
 
     # fastNlMeansDenoising solo soporta CV_8U
     if image.dtype != np.uint8:
@@ -94,7 +111,7 @@ def apply(image: np.ndarray, params: np.ndarray) -> np.ndarray:
 
 def format_params(params: np.ndarray) -> str:
     """Representación legible para humanos de los parámetros."""
-    h = float(np.clip(params[0], 0.1, None))
-    template = _odd_int(params[1], min_val=3)
-    search = _odd_int(params[2], min_val=template + 2)
+    h = float(np.clip(_finite_float(params[0], LOWER_BOUNDS[0]), LOWER_BOUNDS[0], UPPER_BOUNDS[0]))
+    template = _odd_int(params[1], min_val=3, max_val=int(UPPER_BOUNDS[1]))
+    search = _odd_int(params[2], min_val=template + 2, max_val=int(UPPER_BOUNDS[2]))
     return f"h={h:.2f}, template={template}, search={search}"
