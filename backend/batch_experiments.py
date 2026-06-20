@@ -848,44 +848,71 @@ def markdown_num(value: Any, decimals: int = 3) -> str:
     return f"{number:.{decimals}f}"
 
 
+def markdown_mean_std(mean: Any, std: Any, decimals: int = 3) -> str:
+    mean_text = markdown_num(mean, decimals)
+    if not mean_text:
+        return ""
+
+    std_text = markdown_num(std, decimals)
+    if not std_text:
+        return mean_text
+
+    return f"{mean_text} +/- {std_text}"
+
+
 def write_markdown_summary(path: Path, averages: list[dict[str, Any]], filters: list[str]) -> None:
+    repetitions = sorted({int(record["repetitions"]) for record in averages})
+    if len(repetitions) == 1:
+        repetition_text = f"Valores reportados como media muestral +/- desviacion estandar muestral, con n = {repetitions[0]}."
+    else:
+        repetition_text = "Valores reportados como media muestral +/- desviacion estandar muestral, con n igual al numero de repeticiones disponibles por combinacion."
+
     lines = [
         "# Resumen de experimentos",
         "",
-        "Las tablas muestran promedios por filtro, imagen, ruido, metrica objetivo y algoritmo.",
+        "Las tablas muestran promedio +/- desviacion estandar por filtro, imagen, ruido, metrica objetivo y algoritmo.",
+        repetition_text,
         "",
     ]
 
     for filter_type in filters:
-        rows = [record for record in averages if record["filter"] == filter_type]
-        if not rows:
+        filter_rows = [record for record in averages if record["filter"] == filter_type]
+        if not filter_rows:
             continue
 
         filter_label = FILTER_LABELS.get(filter_type, filter_type)
         lines.extend([
             f"## {filter_label}",
             "",
-            "| Imagen | Ruido | Metrica | Algoritmo | Reps | MSE prom. | SNR prom. | PIQE prom. | Tiempo prom. (s) | Mejor costo prom. |",
-            "|---|---|---|---|---:|---:|---:|---:|---:|---:|",
         ])
-        for row in rows:
-            lines.append(
-                "| "
-                + " | ".join([
-                    row["image"],
-                    row["noise"],
-                    row["metric"].upper(),
-                    row["algorithm_label"],
-                    str(row["repetitions"]),
-                    markdown_num(row["mse_mean"]),
-                    markdown_num(row["snr_mean"]),
-                    markdown_num(row["piqe_mean"]),
-                    markdown_num((row["duration_ms_mean"] or 0.0) / 1000.0, 2),
-                    markdown_num(row["best_cost_mean"]),
-                ])
-                + " |"
-            )
-        lines.append("")
+        for image_name in sorted({record["image"] for record in filter_rows}):
+            rows = [record for record in filter_rows if record["image"] == image_name]
+            lines.extend([
+                f"### {image_name}",
+                "",
+                "| Ruido | Metrica | Algoritmo | MSE prom. +/- desv. | SNR prom. +/- desv. | PIQE prom. +/- desv. | Tiempo prom. +/- desv. (s) | Mejor costo prom. +/- desv. |",
+                "|---|---|---|---:|---:|---:|---:|---:|",
+            ])
+            for row in rows:
+                lines.append(
+                    "| "
+                    + " | ".join([
+                        row["noise"],
+                        row["metric"].upper(),
+                        row["algorithm_label"],
+                        markdown_mean_std(row["mse_mean"], row["mse_std"]),
+                        markdown_mean_std(row["snr_mean"], row["snr_std"]),
+                        markdown_mean_std(row["piqe_mean"], row["piqe_std"]),
+                        markdown_mean_std(
+                            (row["duration_ms_mean"] or 0.0) / 1000.0,
+                            (row["duration_ms_std"] or 0.0) / 1000.0,
+                            2,
+                        ),
+                        markdown_mean_std(row["best_cost_mean"], row["best_cost_std"]),
+                    ])
+                    + " |"
+                )
+            lines.append("")
 
     path.write_text("\n".join(lines), encoding="utf-8")
 
@@ -919,6 +946,18 @@ def fmt_num(value: Any, decimals: int = 2) -> str:
     return f"{number:.{decimals}f}"
 
 
+def fmt_mean_std(mean: Any, std: Any, decimals: int = 2) -> str:
+    mean_text = fmt_num(mean, decimals)
+    if mean_text == "--":
+        return mean_text
+
+    std_text = fmt_num(std, decimals)
+    if std_text == "--":
+        return mean_text
+
+    return f"{mean_text} $\\pm$ {std_text}"
+
+
 def fmt_improvement(record: dict[str, Any]) -> str:
     value = record.get("improvement_value")
     percent = record.get("improvement_percent")
@@ -937,47 +976,58 @@ def write_latex_tables(output_dir: Path, averages: list[dict[str, Any]], filters
     paths: list[Path] = []
 
     for filter_type in filters:
-        rows = [
+        filter_rows = [
             record for record in averages
             if record.get("filter") == filter_type
         ]
-        if not rows:
+        if not filter_rows:
             continue
 
         label = FILTER_LABELS.get(filter_type, filter_type)
-        path = latex_dir / f"comparacion_{filter_type}.tex"
-        lines = [
-            r"\begin{table}[htbp]",
-            r"\centering",
-            r"\scriptsize",
-            f"\\caption{{Comparacion de resultados para {latex_escape(label)}}}",
-            r"\begin{tabular}{lllllrrrrr}",
-            r"\hline",
-            r"Img & Ruido & Obj. & Alg. & Reps & MSE & SNR & PIQE & Costo & t(s) \\",
-            r"\hline",
-        ]
-        for row in rows:
-            cells = [
-                latex_escape(row["image"]),
-                latex_escape(row["noise"]),
-                latex_escape(row["metric"].upper()),
-                latex_escape(row["algorithm_label"]),
-                str(row["repetitions"]),
-                fmt_num(row["mse_mean"]),
-                fmt_num(row["snr_mean"]),
-                fmt_num(row["piqe_mean"]),
-                fmt_num(row["best_cost_mean"]),
-                fmt_num((row["duration_ms_mean"] or 0.0) / 1000.0, 1),
+        for image_name in sorted({record["image"] for record in filter_rows}):
+            rows = [record for record in filter_rows if record["image"] == image_name]
+            image_stem = Path(image_name).stem
+            path = latex_dir / f"comparacion_{filter_type}_{image_stem}.tex"
+            repetitions = sorted({int(record["repetitions"]) for record in rows})
+            repetition_note = (
+                f"Media muestral +/- desviacion estandar muestral; n = {repetitions[0]}."
+                if len(repetitions) == 1
+                else "Media muestral +/- desviacion estandar muestral; n corresponde a las repeticiones disponibles por combinacion."
+            )
+            lines = [
+                r"\begin{table}[htbp]",
+                r"\centering",
+                r"\scriptsize",
+                f"\\caption{{Comparacion de resultados para {latex_escape(label)} en {latex_escape(image_name)}. {latex_escape(repetition_note)}}}",
+                r"\begin{tabular}{lllrrrrr}",
+                r"\hline",
+                r"Ruido & Obj. & Alg. & MSE & SNR & PIQE & Costo & t(s) \\",
+                r"\hline",
             ]
-            lines.append(" & ".join(cells) + r" \\")
-        lines.extend([
-            r"\hline",
-            r"\end{tabular}",
-            r"\end{table}",
-            "",
-        ])
-        path.write_text("\n".join(lines), encoding="utf-8")
-        paths.append(path)
+            for row in rows:
+                cells = [
+                    latex_escape(row["noise"]),
+                    latex_escape(row["metric"].upper()),
+                    latex_escape(row["algorithm_label"]),
+                    fmt_mean_std(row["mse_mean"], row["mse_std"]),
+                    fmt_mean_std(row["snr_mean"], row["snr_std"]),
+                    fmt_mean_std(row["piqe_mean"], row["piqe_std"]),
+                    fmt_mean_std(row["best_cost_mean"], row["best_cost_std"]),
+                    fmt_mean_std(
+                        (row["duration_ms_mean"] or 0.0) / 1000.0,
+                        (row["duration_ms_std"] or 0.0) / 1000.0,
+                        1,
+                    ),
+                ]
+                lines.append(" & ".join(cells) + r" \\")
+            lines.extend([
+                r"\hline",
+                r"\end{tabular}",
+                r"\end{table}",
+                "",
+            ])
+            path.write_text("\n".join(lines), encoding="utf-8")
+            paths.append(path)
 
     return paths
 
