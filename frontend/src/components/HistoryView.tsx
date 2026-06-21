@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
+import type { ChangeEvent } from 'react';
+import { FiChevronLeft, FiChevronRight } from 'react-icons/fi';
 import { HistoryDetail, HistoryEntryType, HistorySummary } from '../types';
 import HistoryDetailView from './HistoryDetail';
 import Modal from './Modal';
@@ -6,6 +8,15 @@ import PdfExportButton from './PdfExportButton';
 import { FILTER_LABELS, exportReportPdf, historyDetailToReport } from '../utils/pdfReport';
 
 const ALGORITHM_ABBR: Record<string, string> = { ooa: 'OOA', sfoa: 'SFOA', ao: 'AO', aquila: 'AO' };
+const DEFAULT_HISTORY_PAGE_SIZE = 50;
+const HISTORY_PAGE_SIZE_OPTIONS = [25, 50, 100];
+const MAX_VISIBLE_PAGES = 5;
+
+function getVisiblePageNumbers(currentPage: number, totalPages: number) {
+  const count = Math.min(totalPages, MAX_VISIBLE_PAGES);
+  const start = Math.min(Math.max(0, currentPage - Math.floor(count / 2)), Math.max(0, totalPages - count));
+  return Array.from({ length: count }, (_, index) => start + index);
+}
 
 interface Props {
   apiBase: string;
@@ -17,22 +28,44 @@ interface Props {
 export default function HistoryView({ apiBase, onLoadConfig, onAuthExpired, onBack }: Props) {
   const [items, setItems] = useState<HistorySummary[]>([]);
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(DEFAULT_HISTORY_PAGE_SIZE);
+  const [totalItems, setTotalItems] = useState(0);
   const [selectedEntry, setSelectedEntry] = useState<{ entryType: HistoryEntryType; id: number } | null>(null);
   const [deletingKey, setDeletingKey] = useState<string | null>(null);
+
+  const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+  const visiblePageNumbers = getVisiblePageNumbers(page, totalPages);
 
   const loadHistory = useCallback(async () => {
     setLoading(true);
     try {
-      const r = await fetch(`${apiBase}/api/history`, { credentials: 'include' });
-      if (r.status === 401) {
+      const offset = page * pageSize;
+      const [historyResponse, countResponse] = await Promise.all([
+        fetch(`${apiBase}/api/history?limit=${pageSize}&offset=${offset}`, { credentials: 'include' }),
+        fetch(`${apiBase}/api/history/count`, { credentials: 'include' }),
+      ]);
+      if (historyResponse.status === 401 || countResponse.status === 401) {
         onAuthExpired();
         return;
       }
-      if (r.ok) setItems(await r.json());
+      if (countResponse.ok) {
+        const data = (await countResponse.json()) as { total: number };
+        const nextTotal = data.total;
+        const nextTotalPages = Math.max(1, Math.ceil(nextTotal / pageSize));
+        setTotalItems(nextTotal);
+        if (page > nextTotalPages - 1) {
+          setPage(nextTotalPages - 1);
+          return;
+        }
+      }
+      if (historyResponse.ok) {
+        setItems((await historyResponse.json()) as HistorySummary[]);
+      }
     } finally {
       setLoading(false);
     }
-  }, [apiBase, onAuthExpired]);
+  }, [apiBase, onAuthExpired, page, pageSize]);
 
   useEffect(() => {
     loadHistory();
@@ -50,11 +83,20 @@ export default function HistoryView({ apiBase, onLoadConfig, onAuthExpired, onBa
         return;
       }
       if (r.ok || r.status === 204) {
-        setItems((prev) => prev.filter((i) => i.history_key !== item.history_key));
+        if (items.length === 1 && page > 0) {
+          setPage((current) => Math.max(0, current - 1));
+        } else {
+          await loadHistory();
+        }
       }
     } finally {
       setDeletingKey(null);
     }
+  };
+
+  const handlePageSizeChange = (event: ChangeEvent<HTMLSelectElement>) => {
+    setPageSize(Number(event.target.value));
+    setPage(0);
   };
 
   const handleLoadConfigByItem = async (item: HistorySummary) => {
@@ -86,9 +128,6 @@ export default function HistoryView({ apiBase, onLoadConfig, onAuthExpired, onBa
       <div className="history-view-header">
         <button className="history-back-btn" onClick={onBack} title="Volver al inicio">←</button>
         <span className="history-view-title">Historial</span>
-        <span className="history-view-count">
-          {items.length} entrada{items.length !== 1 ? 's' : ''}
-        </span>
       </div>
 
       {loading ?
@@ -159,6 +198,51 @@ export default function HistoryView({ apiBase, onLoadConfig, onAuthExpired, onBa
           </tbody>
         </table>
       }
+
+      {!loading && items.length > 0 && (
+        <nav className="history-pagination" aria-label="Paginación del historial">
+          <div className="history-pagination-total">
+            Total entradas: <strong>{totalItems}</strong>
+          </div>
+          <div className="history-page-list">
+            <button
+              className="history-page-step"
+              onClick={() => setPage((current) => Math.max(0, current - 1))}
+              disabled={page === 0}
+              title="Página anterior"
+              aria-label="Página anterior">
+              <FiChevronLeft aria-hidden="true" />
+            </button>
+            {visiblePageNumbers.map((pageNumber) => (
+              <button
+                key={pageNumber}
+                className={`history-page-number${pageNumber === page ? ' active' : ''}`}
+                onClick={() => setPage(pageNumber)}
+                aria-current={pageNumber === page ? 'page' : undefined}>
+                {pageNumber + 1}
+              </button>
+            ))}
+            <button
+              className="history-page-step"
+              onClick={() => setPage((current) => Math.min(totalPages - 1, current + 1))}
+              disabled={page >= totalPages - 1}
+              title="Página siguiente"
+              aria-label="Página siguiente">
+              <FiChevronRight aria-hidden="true" />
+            </button>
+          </div>
+          <label className="history-page-size">
+            <span>Por página:</span>
+            <select value={pageSize} onChange={handlePageSizeChange}>
+              {HISTORY_PAGE_SIZE_OPTIONS.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
+          </label>
+        </nav>
+      )}
 
       {selectedEntry !== null && (
         <Modal onClose={() => setSelectedEntry(null)}>
