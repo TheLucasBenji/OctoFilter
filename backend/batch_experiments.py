@@ -38,12 +38,13 @@ from main import ALGORITHMS, FILTER_LABELS, FILTER_MODULES, _adjusted_bounds, _c
 DEFAULT_IMAGES = ["lena.png", "cameraman.png", "barbara.png"]
 DEFAULT_NOISE = ["gaussian:15", "gaussian:35"]
 DEFAULT_FILTERS = ["bilateral", "anisotropic", "nlmeans"]
-DEFAULT_METRICS = ["snr", "piqe"]
+DEFAULT_METRICS = ["mse", "snr", "piqe"]
 DEFAULT_ALGORITHMS = ["ooa", "sfoa", "ao"]
 DEFAULT_POPULATION = 10
 DEFAULT_ITERATIONS = 10
 DEFAULT_REPETITIONS = 10
 DEFAULT_SEED = 20260615
+REPORT_METRIC_ORDER = {"mse": 0, "snr": 1, "piqe": 2}
 
 ALGORITHM_LABELS = {
     "ooa": "OOA",
@@ -268,7 +269,7 @@ def build_parser() -> argparse.ArgumentParser:
         nargs="+",
         choices=["mse", "snr", "piqe"],
         default=DEFAULT_METRICS,
-        help="Metricas objetivo",
+        help="Metricas objetivo (default: mse snr piqe)",
     )
     parser.add_argument(
         "--algorithms",
@@ -764,6 +765,21 @@ def metric_value(record: dict[str, Any], key: str) -> Any:
     return record.get("metrics", {}).get(key)
 
 
+def report_metric_order(metric: Any) -> int:
+    return REPORT_METRIC_ORDER.get(str(metric).lower(), len(REPORT_METRIC_ORDER))
+
+
+def average_sort_key(record: dict[str, Any]) -> tuple[Any, ...]:
+    return (
+        record["filter"],
+        record["image"],
+        record["noise"],
+        report_metric_order(record["metric"]),
+        record["metric"],
+        record["algorithm"],
+    )
+
+
 def build_average_records(runs: list[dict[str, Any]]) -> list[dict[str, Any]]:
     grouped: dict[tuple[str, str, str, str, str], list[dict[str, Any]]] = defaultdict(list)
 
@@ -780,7 +796,17 @@ def build_average_records(runs: list[dict[str, Any]]) -> list[dict[str, Any]]:
         grouped[key].append(run)
 
     averages: list[dict[str, Any]] = []
-    for key in sorted(grouped):
+    for key in sorted(
+        grouped,
+        key=lambda item: (
+            item[0],
+            item[1],
+            item[2],
+            report_metric_order(item[3]),
+            item[3],
+            item[4],
+        ),
+    ):
         rows = sorted(grouped[key], key=lambda item: item["repetition"])
         first = rows[0]
         record: dict[str, Any] = {
@@ -860,6 +886,15 @@ def markdown_mean_std(mean: Any, std: Any, decimals: int = 3) -> str:
     return f"{mean_text} +/- {std_text}"
 
 
+def markdown_objective_value(row: dict[str, Any], metric: str) -> str:
+    value = markdown_mean_std(row[f"{metric}_mean"], row[f"{metric}_std"])
+    if not value:
+        return value
+    if row["metric"] == metric:
+        return f"**{value}**"
+    return value
+
+
 def write_markdown_summary(path: Path, averages: list[dict[str, Any]], filters: list[str]) -> None:
     repetitions = sorted({int(record["repetitions"]) for record in averages})
     if len(repetitions) == 1:
@@ -886,12 +921,15 @@ def write_markdown_summary(path: Path, averages: list[dict[str, Any]], filters: 
             "",
         ])
         for image_name in sorted({record["image"] for record in filter_rows}):
-            rows = [record for record in filter_rows if record["image"] == image_name]
+            rows = sorted(
+                (record for record in filter_rows if record["image"] == image_name),
+                key=average_sort_key,
+            )
             lines.extend([
                 f"### {image_name}",
                 "",
-                "| Ruido | Metrica | Algoritmo | MSE prom. +/- desv. | SNR prom. +/- desv. | PIQE prom. +/- desv. | Tiempo prom. +/- desv. (s) | Mejor costo prom. +/- desv. |",
-                "|---|---|---|---:|---:|---:|---:|---:|",
+                "| Ruido | Obj. | Alg. | MSE | SNR | PIQE | t(s) |",
+                "|---|---|---|---:|---:|---:|---:|",
             ])
             for row in rows:
                 lines.append(
@@ -900,15 +938,14 @@ def write_markdown_summary(path: Path, averages: list[dict[str, Any]], filters: 
                         row["noise"],
                         row["metric"].upper(),
                         row["algorithm_label"],
-                        markdown_mean_std(row["mse_mean"], row["mse_std"]),
-                        markdown_mean_std(row["snr_mean"], row["snr_std"]),
-                        markdown_mean_std(row["piqe_mean"], row["piqe_std"]),
+                        markdown_objective_value(row, "mse"),
+                        markdown_objective_value(row, "snr"),
+                        markdown_objective_value(row, "piqe"),
                         markdown_mean_std(
                             (row["duration_ms_mean"] or 0.0) / 1000.0,
                             (row["duration_ms_std"] or 0.0) / 1000.0,
                             2,
                         ),
-                        markdown_mean_std(row["best_cost_mean"], row["best_cost_std"]),
                     ])
                     + " |"
                 )
@@ -985,7 +1022,10 @@ def write_latex_tables(output_dir: Path, averages: list[dict[str, Any]], filters
 
         label = FILTER_LABELS.get(filter_type, filter_type)
         for image_name in sorted({record["image"] for record in filter_rows}):
-            rows = [record for record in filter_rows if record["image"] == image_name]
+            rows = sorted(
+                (record for record in filter_rows if record["image"] == image_name),
+                key=average_sort_key,
+            )
             image_stem = Path(image_name).stem
             path = latex_dir / f"comparacion_{filter_type}_{image_stem}.tex"
             repetitions = sorted({int(record["repetitions"]) for record in rows})
@@ -999,20 +1039,30 @@ def write_latex_tables(output_dir: Path, averages: list[dict[str, Any]], filters
                 r"\centering",
                 r"\scriptsize",
                 f"\\caption{{Comparacion de resultados para {latex_escape(label)} en {latex_escape(image_name)}. {latex_escape(repetition_note)}}}",
-                r"\begin{tabular}{lllrrrrr}",
+                r"\begin{tabular}{lllrrrr}",
                 r"\hline",
-                r"Ruido & Obj. & Alg. & MSE & SNR & PIQE & Costo & t(s) \\",
+                r"Ruido & Obj. & Alg. & MSE & SNR & PIQE & t(s) \\",
                 r"\hline",
             ]
             for row in rows:
+                metric_label = row["metric"].upper()
+                mse_value = fmt_mean_std(row["mse_mean"], row["mse_std"])
+                snr_value = fmt_mean_std(row["snr_mean"], row["snr_std"])
+                piqe_value = fmt_mean_std(row["piqe_mean"], row["piqe_std"])
+                if row["metric"] == "mse":
+                    mse_value = rf"\textbf{{{mse_value}}}"
+                elif row["metric"] == "snr":
+                    snr_value = rf"\textbf{{{snr_value}}}"
+                elif row["metric"] == "piqe":
+                    piqe_value = rf"\textbf{{{piqe_value}}}"
+
                 cells = [
                     latex_escape(row["noise"]),
-                    latex_escape(row["metric"].upper()),
+                    latex_escape(metric_label),
                     latex_escape(row["algorithm_label"]),
-                    fmt_mean_std(row["mse_mean"], row["mse_std"]),
-                    fmt_mean_std(row["snr_mean"], row["snr_std"]),
-                    fmt_mean_std(row["piqe_mean"], row["piqe_std"]),
-                    fmt_mean_std(row["best_cost_mean"], row["best_cost_std"]),
+                    mse_value,
+                    snr_value,
+                    piqe_value,
                     fmt_mean_std(
                         (row["duration_ms_mean"] or 0.0) / 1000.0,
                         (row["duration_ms_std"] or 0.0) / 1000.0,
