@@ -17,7 +17,7 @@ import InfoHint from './InfoHint';
 import MetricSelector from './MetricSelector';
 import ParamLabel from './ParamLabel';
 
-const API = 'http://localhost:8000';
+const API = import.meta.env.VITE_API_BASE ?? 'http://localhost:8000';
 
 interface Props {
   params: AppParams;
@@ -339,6 +339,7 @@ export default function Sidebar({
                 </label>
                 <input
                   type="range"
+                  aria-label="Población"
                   min={9}
                   max={200}
                   step={1}
@@ -355,6 +356,7 @@ export default function Sidebar({
                 </label>
                 <input
                   type="range"
+                  aria-label="Iteraciones"
                   min={5}
                   max={500}
                   step={5}
@@ -371,6 +373,7 @@ export default function Sidebar({
                 </label>
                 <input
                   type="number"
+                  aria-label="Semilla"
                   placeholder="-"
                   value={params.seed}
                   onChange={(e) => set('seed', e.target.value)}
@@ -410,6 +413,7 @@ export default function Sidebar({
                   </label>
                   <input
                     type="range"
+                    aria-label="Sigma"
                     min={1}
                     max={100}
                     step={1}
@@ -425,6 +429,7 @@ export default function Sidebar({
                   </label>
                   <input
                     type="range"
+                    aria-label="Cantidad"
                     min={0.01}
                     max={0.3}
                     step={0.01}

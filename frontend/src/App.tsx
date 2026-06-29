@@ -24,7 +24,7 @@ import PdfExportButton from './components/PdfExportButton';
 import ExperimentalView from './components/ExperimentalView';
 import { exportReportPdf } from './utils/pdfReport';
 
-const API = 'http://localhost:8000';
+const API = import.meta.env.VITE_API_BASE ?? 'http://localhost:8000';
 const octopusLogo = new URL('./public/octopus.svg', import.meta.url).href;
 
 const DEFAULT_PARAMS: AppParams = {

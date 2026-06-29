@@ -8,6 +8,7 @@ import sys
 import threading
 import time
 import uuid
+from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from typing import Optional
 
@@ -36,7 +37,14 @@ from algorithms.ao.algorithm import ao
 from algorithms.ooa.algorithm import ooa
 from algorithms.sfoa.algorithm import sfoa
 
-app = FastAPI(title="Octopus API")
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    init_auth_db()
+    yield
+
+
+app = FastAPI(title="Octopus API", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -136,11 +144,6 @@ class LoginRequest(BaseModel):
     email: str
     password: str
     remember: bool = True
-
-
-@app.on_event("startup")
-def startup():
-    init_auth_db()
 
 
 def set_session_cookie(response: Response, token: str, max_age: Optional[int]) -> None:

@@ -94,7 +94,13 @@ export default function ImageWorkspace({ appState, originalImage, noisyImage, re
             onDragLeave={() => setDrag(false)}
             onDrop={e => { e.preventDefault(); setDrag(false); handleFiles(e.dataTransfer.files); }}
           >
-            <input type="file" accept="image/*" onChange={e => handleFiles(e.target.files)} />
+            <input
+              type="file"
+              accept="image/*"
+              aria-label="Seleccionar imagen"
+              data-testid="workspace-file-input"
+              onChange={e => handleFiles(e.target.files)}
+            />
             <div className="upload-ring">+</div>
             <div className="upload-label">Arrastra una imagen o haz clic</div>
             <div className="upload-hint">PNG · JPG</div>
@@ -105,7 +111,13 @@ export default function ImageWorkspace({ appState, originalImage, noisyImage, re
             {!readOnly && (
               <div className="change-img">
                 <label>
-                  <input type="file" accept="image/*" onChange={e => handleFiles(e.target.files)} />
+                  <input
+                    type="file"
+                    accept="image/*"
+                    aria-label="Cambiar imagen"
+                    data-testid="workspace-change-file-input"
+                    onChange={e => handleFiles(e.target.files)}
+                  />
                   cambiar imagen
                 </label>
               </div>

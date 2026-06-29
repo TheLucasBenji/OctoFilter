@@ -211,7 +211,13 @@ function ManualWorkspace({
               handleFiles(e.dataTransfer.files);
             }}
           >
-            <input type="file" accept="image/*" onChange={(e) => handleFiles(e.target.files)} />
+            <input
+              type="file"
+              accept="image/*"
+              aria-label="Seleccionar imagen experimental"
+              data-testid="experimental-file-input"
+              onChange={(e) => handleFiles(e.target.files)}
+            />
             <div className="upload-ring">+</div>
             <div className="upload-label">Arrastra una imagen o haz clic</div>
             <div className="upload-hint">PNG · JPG</div>
@@ -223,7 +229,13 @@ function ManualWorkspace({
             </div>
             <div className="change-img">
               <label>
-                <input type="file" accept="image/*" onChange={(e) => handleFiles(e.target.files)} />
+                <input
+                  type="file"
+                  accept="image/*"
+                  aria-label="Cambiar imagen experimental"
+                  data-testid="experimental-change-file-input"
+                  onChange={(e) => handleFiles(e.target.files)}
+                />
                 cambiar imagen
               </label>
             </div>
